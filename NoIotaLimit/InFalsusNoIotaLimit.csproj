@@ -66,6 +66,18 @@
       <HintPath>$(GameDir)\MelonLoader\Il2CppAssemblies\UnityEngine.CoreModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(GameDir)\BepInEx\core\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Game.Data">
+      <HintPath>$(GameDir)\BepInEx\interop\Game.Data.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Game.Common">
+      <HintPath>$(GameDir)\BepInEx\interop\Game.Common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 
 </Project>

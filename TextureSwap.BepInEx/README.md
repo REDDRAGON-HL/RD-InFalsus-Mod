@@ -2,6 +2,8 @@
 
 更换游戏的看板立绘
 
+**English:** Replaces the game's character illustrations.
+
 ## 装
 
 1. 游戏目录里要有 BepInEx 6 IL2CPP。

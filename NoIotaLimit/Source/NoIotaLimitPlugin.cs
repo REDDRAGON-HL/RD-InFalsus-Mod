@@ -1,7 +1,9 @@
+using System;
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using BepInEx.Unity.IL2CPP;
+using HarmonyLib;
 using UnityEngine;
 
 namespace InFalsusNoIotaLimit
@@ -11,6 +13,7 @@ namespace InFalsusNoIotaLimit
     {
         internal static ManualLogSource LogSource;
         internal static ConfigEntry<bool> PatchUiCap;
+        private static Harmony _harmony;
 
         public override void Load()
         {
@@ -25,6 +28,24 @@ namespace InFalsusNoIotaLimit
             LogSource.LogInfo("loading: removing the 9999 particle cap");
             AddComponent<NoIotaLimitBehaviour>();
             if (PatchUiCap.Value) NoIotaLimitCore.PatchUiCapCode();
+
+            try
+            {
+                _harmony = new Harmony("RedDragon.InFalsusNoIotaLimit");
+                _harmony.PatchAll(typeof(NoIotaLimitPlugin).Assembly);
+                LogSource.LogInfo("inventory guard installed");
+            }
+            catch (Exception e)
+            {
+                LogSource.LogError(e.ToString());
+            }
+        }
+
+        public override bool Unload()
+        {
+            _harmony?.UnpatchSelf();
+            _harmony = null;
+            return true;
         }
     }
 

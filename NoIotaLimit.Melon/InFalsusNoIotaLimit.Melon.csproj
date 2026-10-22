@@ -62,6 +62,18 @@
       <HintPath>$(GameDir)\MelonLoader\Il2CppAssemblies\UnityEngine.CoreModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(GameDir)\MelonLoader\net6\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppGame.Data">
+      <HintPath>$(GameDir)\MelonLoader\Il2CppAssemblies\Il2CppGame.Data.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppGame.Common">
+      <HintPath>$(GameDir)\MelonLoader\Il2CppAssemblies\Il2CppGame.Common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 
 </Project>

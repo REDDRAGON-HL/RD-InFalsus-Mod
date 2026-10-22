@@ -2,6 +2,8 @@
 
 **这不是一个 mod，而是 BepInEx 转接层。**
 
+**English:** This is not a mod; it is a BepInEx compatibility layer.
+
 ScoreCountdown 的源码原本是按 MelonLoader 的 API 写的（`MelonMod`、`MelonLogger`、
 `MelonEnvironment`、`NativeHook<T>`、`[MelonInfo]`/`[MelonGame]`）。BepInEx 没有这些类型，
 所以这里用一个很小的共享程序集把它们映射到 BepInEx 6 IL2CPP 的对应物：
