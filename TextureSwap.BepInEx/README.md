@@ -1,4 +1,8 @@
-# 装
+# InFalsusTextureSwap
+
+更换游戏的看板立绘
+
+## 装
 
 1. 游戏目录里要有 BepInEx 6 IL2CPP。
 2. 把 `InFalsusTextureSwap.dll` 放进 `BepInEx/plugins/InFalsusTextureSwap/`。
@@ -23,11 +27,9 @@ Iris_UI_characterillust
 Story_UIcharacterillust
 ```
 
-注意 Iris 多一个下划线：`Iris_UI_characterillust`。
-
 ## 压图
 
-和 MelonLoader 版一样，用仓库 `TextureSwap/` 目录里的脚本（本包不包含）：
+使用[仓库](https://github.com/REDDRAGON-HL/RD-InFalsus-Mod)下 `TextureSwap/` 目录里的脚本：
 
 **Nia / Mei（DXT5，2048×2048）**
 
