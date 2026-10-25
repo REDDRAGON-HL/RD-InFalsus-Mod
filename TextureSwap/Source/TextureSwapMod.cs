@@ -6,56 +6,29 @@ using MelonLoader;
 using MelonLoader.Utils;
 using UnityEngine;
 
-[assembly: MelonInfo(typeof(InFalsusTextureSwap.TextureSwapMod), "InFalsusTextureSwap", "1.1.0", "infalsus", null)]
+[assembly: MelonInfo(typeof(InFalsusTextureSwap.TextureSwapMod), "InFalsusTextureSwap", "1.2.0", "infalsus", null)]
 [assembly: MelonGame("lowiro", "infalsus")]
 
 namespace InFalsusTextureSwap
 {
-    /// <summary>
-    /// 把游戏里**已加载**的 Texture2D 换成同尺寸的像素，运行时生效、不动游戏文件。
-    ///
-    /// 一路上试错的结论（都实测过，别再走一遍）：
-    /// <list type="bullet">
-    /// <item><c>ImageConversion.LoadImage</c>：Unity 6 的参数是 `ReadOnlySpan&lt;byte&gt;`，
-    /// Il2CppInterop 的 span 封送是坏的 → 运行时 MissingMethodException。</item>
-    /// <item><c>LoadRawTextureData</c> 直接写目标：bundle 里的贴图**不可读**（isReadable 只在导入时
-    /// 决定，运行时改不了）→ 抛 UnityException。</item>
-    /// <item><c>Reinitialize</c> 改格式再 <c>CopyTexture</c>：Reinitialize 对 bundle 贴图无效，
-    /// 目标仍是 DXT5，而 CopyTexture 只肯在**同一格式组**之间拷 → 拒绝，只在 Player.log 留一行
-    /// "can only copy between same texture format groups"。</item>
-    /// <item><c>ConvertTexture</c>（会做格式转换）：压缩格式不能当渲染目标 →
-    /// "Unsupported destination format in Graphics.ConvertTexture"。</item>
-    /// <item><c>SetPixels32</c> 往 DXT5 贴图塞像素：Unity 只允许 RGBA32/ARGB32/RGB24/Alpha8 →
-    /// "texture uses an unsupported format"。</item>
-    /// </list>
-    ///
-    /// 所以正解是**让源和目标同格式**：源数据由同目录的 `png_to_dxt5.py` / `png_to_bc7.py`
-    /// 离线压好，这里新建一张同格式的贴图、`LoadRawTextureData` 塞进去（压缩格式只能这样写），
-    /// 再 `CopyTexture` 进目标 —— 同格式，放行。换的是贴图本身，UI 的 Sprite / 材质 / 特效全都自然跟着变。
-    ///
-    /// 要换哪些写在 <c>Mods/InFalsusTextureSwap.txt</c>，一行一条 <c>贴图名 = 数据文件</c>；
-    /// 后缀 `.dxt5` / `.bc7` 表示压缩贴图的原始数据，`.rgba` 表示 RGBA32 原始数据，
-    /// **必须和目标贴图的格式一致**。值写 <c>#blank</c> 则把该贴图换成同尺寸全透明
-    /// （用来去掉发光、遮罩之类的叠加层，格式按目标现算；BC7 不支持，全零块是不透明黑）。
-    /// 相对路径先找本目录（Mods/）再找游戏根目录。
-    ///
-    /// 换了谁的立绘（`*_UIcharacterillust`），就自动把那个角色颈束的发光
-    /// （`<角色>_bind_glow`）一起置空 —— 立绘里没有那条发光了，留着会很突兀。
-    ///
-    /// **尺寸必须和原贴图一致**：UI 的 Sprite 在创建时就把 UV 按当时的贴图尺寸烘好了，换尺寸会让
-    /// 取样区域错位。数据长度对不上就拒绝并报错，不猜。
-    ///
-    /// 为什么轮询而不装钩子：贴图是 UI 打开时才从 bundle 载入的，载入时刻不确定，还可能被卸载后
-    /// 重新载入。所以每秒扫一次已加载对象，遇到没换过的实例就换（同一个实例只换一次）。
-    /// </summary>
     public class TextureSwapMod : MelonMod
     {
         private const string ConfigName = "InFalsusTextureSwap.txt";
         private const float Interval = 1f;
 
+        private static readonly Dictionary<string, string> BindGlowNames =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "nia", "nia_bind_glow" },
+                { "mei", "mei_bind_glow" },
+                { "ayame", "ayame_bind" },
+                { "iris", "bind_white_blur_50" },
+                { "story", "story_bind" },
+            };
+
         private sealed class Replacement
         {
-            public byte[] Data;          // null = 置空（换成同尺寸全透明，用来去掉发光之类的叠加层）
+            public byte[] Data;          
             public TextureFormat Format;
         }
 
@@ -119,10 +92,6 @@ namespace InFalsusTextureSwap
             if (_wanted.Count == 0) LoggerInstance.Warning("配置里没有可换的贴图");
         }
 
-        /// <summary>
-        /// 换了谁的立绘，就把谁的颈束发光一起置空：`Nia_UIcharacterillust` -> `nia_bind_glow`。
-        /// 配置里显式写过同名条目就以配置为准。
-        /// </summary>
         private void BlankBindGlow(string illustName)
         {
             string prefix = null;
@@ -136,7 +105,9 @@ namespace InFalsusTextureSwap
             }
             if (string.IsNullOrEmpty(prefix)) return;
 
-            string glow = prefix.ToLowerInvariant() + "_bind_glow";
+            string glow = BindGlowNames.TryGetValue(prefix, out string mapped)
+                ? mapped
+                : prefix.ToLowerInvariant() + "_bind_glow";
             if (_wanted.ContainsKey(glow)) return;
 
             _wanted[glow] = new Replacement { Data = null, Format = TextureFormat.RGBA32 };
@@ -147,7 +118,6 @@ namespace InFalsusTextureSwap
         {
             if (_wanted.Count == 0) return;
 
-            // 上一轮建的临时贴图，等 GPU 侧的拷贝真正落地后再销毁
             if (_pending.Count > 0)
             {
                 foreach (Texture2D t in _pending) UnityEngine.Object.Destroy(t);
@@ -165,7 +135,6 @@ namespace InFalsusTextureSwap
                 if (!_done.Add(tex.Pointer)) continue;
 
                 int width = tex.width, height = tex.height;
-                // 置空的条目按目标自己的格式现算，所以不用猜它是什么格式
                 TextureFormat format = rep.Data == null ? tex.format : rep.Format;
                 if (format != TextureFormat.DXT5 && format != TextureFormat.BC7 &&
                     format != TextureFormat.RGBA32)
@@ -216,7 +185,6 @@ namespace InFalsusTextureSwap
             }
         }
 
-        /// <summary>原始数据应有的字节数（DXT5 / BC7 都是 16 字节一个 4x4 块）。</summary>
         private static int ExpectedLength(TextureFormat format, int width, int height)
         {
             return format == TextureFormat.RGBA32

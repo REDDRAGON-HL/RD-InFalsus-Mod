@@ -2,7 +2,7 @@
 
 更换游戏的看板立绘
 
-**English:** Replaces the game's character illustrations.
+Replaces the game's character illustrations.
 
 ## 装
 
@@ -31,7 +31,7 @@ Story_UIcharacterillust
 
 ## 压图
 
-使用[仓库](https://github.com/REDDRAGON-HL/RD-InFalsus-Mod)下 `TextureSwap/` 目录里的脚本：
+使用[仓库](https://github.com/REDDRAGON-HL/RD-InFalsus-Mod)下 `TextureSwap/` 目录里的脚本或 release 里的 TextureSwap-Tools：
 
 **Nia / Mei（DXT5，2048×2048）**
 
@@ -49,7 +49,7 @@ python png_to_bc7.py 我的图.png
 
 ## 制作立绘
 
-`原图` 文件夹里有 5 张原立绘：
+使用[该仓库](https://github.com/REDDRAGON-HL/InFalsus-Resource)~~或在社交平台找我~~获取原立绘：
 
 1. 把要改的立绘原图拉伸成 4:5。
 2. 在绘图软件里把原图放下层做参考，上层放你的立绘并调整。

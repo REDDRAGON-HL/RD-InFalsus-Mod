@@ -7,7 +7,7 @@
 ## 安装
 
 **r2modman / Gale：** 直接安装本包。依赖 `BepInEx-BepInExPack_IL2CPP` 和
-`InFalsusLoaderCompat`
+`LoaderCompat`
 
 **手动：**
 
@@ -17,4 +17,4 @@
 ## 依赖
 
 - BepInEx **6.0.0-be.788 IL2CPP**
-- `InFalsusLoaderCompat` **1.0.0**
+- `LoaderCompat` **1.0.0**

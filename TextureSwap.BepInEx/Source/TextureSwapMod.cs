@@ -9,14 +9,20 @@ using UnityEngine;
 
 namespace InFalsusTextureSwap
 {
-    /// <summary>
-    /// 把游戏里已加载的 Texture2D 换成同尺寸的像素，运行时生效、不动游戏文件。
-    /// 规则与 MelonLoader 版完全一致；区别只在入口、日志和 Update 的挂载方式。
-    /// </summary>
-    [BepInPlugin("com.infalsus.textureswap", "InFalsusTextureSwap", "1.1.0")]
+    [BepInPlugin("com.infalsus.textureswap", "InFalsusTextureSwap", "1.2.0")]
     public class TextureSwapPlugin : BasePlugin
     {
         private const string ConfigName = "InFalsusTextureSwap.txt";
+
+        private static readonly Dictionary<string, string> BindGlowNames =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "nia", "nia_bind_glow" },
+                { "mei", "mei_bind_glow" },
+                { "ayame", "ayame_bind" },
+                { "iris", "bind_white_blur_50" },
+                { "story", "story_bind" },
+            };
 
         internal static ManualLogSource LogSource;
 
@@ -31,8 +37,6 @@ namespace InFalsusTextureSwap
             string config = Path.Combine(dir, ConfigName);
             if (!File.Exists(config))
             {
-                // 和 MelonLoader 版共用同一份配置：BepInEx 版优先读 DLL 旁边，
-                // 没有就回退到游戏的 Mods/。
                 string shared = Path.Combine(Paths.GameRootPath, "Mods", ConfigName);
                 if (File.Exists(shared)) config = shared;
             }
@@ -92,10 +96,6 @@ namespace InFalsusTextureSwap
             behaviour.Wanted = Wanted;
         }
 
-        /// <summary>
-        /// 换了谁的立绘，就把谁的颈束发光一起置空：`Nia_UIcharacterillust` -> `nia_bind_glow`。
-        /// 配置里显式写过同名条目就以配置为准。
-        /// </summary>
         private void BlankBindGlow(string illustName)
         {
             string prefix = null;
@@ -109,7 +109,9 @@ namespace InFalsusTextureSwap
             }
             if (string.IsNullOrEmpty(prefix)) return;
 
-            string glow = prefix.ToLowerInvariant() + "_bind_glow";
+            string glow = BindGlowNames.TryGetValue(prefix, out string mapped)
+                ? mapped
+                : prefix.ToLowerInvariant() + "_bind_glow";
             if (Wanted.ContainsKey(glow)) return;
 
             Wanted[glow] = new Replacement { Data = null, Format = TextureFormat.RGBA32 };
@@ -119,14 +121,10 @@ namespace InFalsusTextureSwap
 
     internal sealed class Replacement
     {
-        public byte[] Data;          // null = 置空（换成同尺寸全透明，用来去掉发光之类的叠加层）
+        public byte[] Data; 
         public TextureFormat Format;
     }
 
-    /// <summary>
-    /// 每秒扫一次已加载的 Texture2D。贴图是 UI 打开时才载入的，载入时刻不确定，
-    /// 还可能被卸载后重新载入，所以轮询而不是装钩子。
-    /// </summary>
     public class TextureSwapBehaviour : MonoBehaviour
     {
         private const float Interval = 1f;
@@ -141,7 +139,6 @@ namespace InFalsusTextureSwap
         {
             if (Wanted == null || Wanted.Count == 0) return;
 
-            // 上一轮建的临时贴图，等 GPU 侧的拷贝真正落地后再销毁
             if (_pending.Count > 0)
             {
                 foreach (Texture2D t in _pending) UnityEngine.Object.Destroy(t);
@@ -159,7 +156,6 @@ namespace InFalsusTextureSwap
                 if (!_done.Add(tex.Pointer)) continue;
 
                 int width = tex.width, height = tex.height;
-                // 置空的条目按目标自己的格式现算，所以不用猜它是什么格式
                 TextureFormat format = rep.Data == null ? tex.format : rep.Format;
                 if (format != TextureFormat.DXT5 && format != TextureFormat.BC7 &&
                     format != TextureFormat.RGBA32)
@@ -210,7 +206,6 @@ namespace InFalsusTextureSwap
             }
         }
 
-        /// <summary>原始数据应有的字节数（DXT5 / BC7 都是 16 字节一个 4x4 块）。</summary>
         private static int ExpectedLength(TextureFormat format, int width, int height)
         {
             return format == TextureFormat.RGBA32
