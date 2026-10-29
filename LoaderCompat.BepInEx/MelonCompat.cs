@@ -6,9 +6,6 @@ using BepInEx.Logging;
 using BepInEx.Unity.IL2CPP;
 using BepInEx.Unity.IL2CPP.Hook;
 
-// MelonLoader -> BepInEx 兼容层。
-// 只包含现有三个 mod 实际用到的 API：MelonMod 生命周期、MelonLogger、MelonEnvironment、
-// NativeHook<T>、[MelonInfo]/[MelonGame]。业务源码一行不改，BepInEx 工程直接 include 原文件。
 
 namespace MelonLoader
 {
@@ -48,10 +45,6 @@ namespace MelonLoader
         public static void Error(string message) => Instance?.Error(message);
     }
 
-    /// <summary>
-    /// MelonMod 的最小替身。BepInEx 的插件类继承它，BepInEx 通过派生类上的 [BepInPlugin] 发现插件。
-    /// Load() 的调用顺序和 MelonLoader 一致：OnInitializeMelon → OnLateInitializeMelon。
-    /// </summary>
     public abstract class MelonMod : BasePlugin
     {
         public MelonLoggerInstance LoggerInstance => new MelonLoggerInstance(Log);
@@ -99,10 +92,6 @@ namespace MelonLoader.Utils
 
 namespace MelonLoader.NativeUtils
 {
-    /// <summary>
-    /// NativeHook&lt;T&gt; 的 BepInEx 实现。BepInEx 6 自带 INativeDetour（Dobby/Funchook/Il2CppInterop
-    /// 三种 provider），所以不需要额外引入 MinHook 或 MonoMod。
-    /// </summary>
     public sealed class NativeHook<T> where T : Delegate
     {
         public IntPtr Target;
