@@ -1,0 +1,120 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <RootNamespace>CustomSong</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>CustomSong</AssemblyName>
+    <Configurations>Debug;Release;BepInExDebug;BepInExRelease</Configurations>
+
+    <!-- The assembly's version number. -->
+    <AssemblyVersion>1.0.0</AssemblyVersion>
+  </PropertyGroup>
+
+  <!-- Which loader this build targets, and the define it compiles with. -->
+  <PropertyGroup>
+    <Loader Condition="'$(Loader)' == '' And '$(Configuration)' == 'BepInExRelease'">BepInEx</Loader>
+    <Loader Condition="'$(Loader)' == '' And '$(Configuration)' == 'BepInExDebug'">BepInEx</Loader>
+    <Loader Condition="'$(Loader)' == ''">MelonLoader</Loader>
+    <LoaderDir Condition="'$(Loader)' == 'MelonLoader'">Managed\MelonLoader</LoaderDir>
+    <LoaderDir Condition="'$(Loader)' == 'BepInEx'">Managed\BepInEx</LoaderDir>
+    <DefineConstants Condition="'$(Loader)' == 'MelonLoader'">$(DefineConstants);MELONLOADER</DefineConstants>
+    <DefineConstants Condition="'$(Loader)' == 'BepInEx'">$(DefineConstants);BEPINEX</DefineConstants>
+  </PropertyGroup>
+
+  <!-- Assembly attributes the mod does not use. -->
+  <PropertyGroup>
+    <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
+    <GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+    <GenerateAssemblyFileVersionAttribute>false</GenerateAssemblyFileVersionAttribute>
+    <GenerateAssemblyInformationalVersionAttribute>false</GenerateAssemblyInformationalVersionAttribute>
+    <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+    <GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>
+  </PropertyGroup>
+
+  <!-- Native function pointers. -->
+  <PropertyGroup>
+    <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+    <PlatformTarget>x64</PlatformTarget>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+
+  <!-- Release builds carry no symbols; the BepInEx configurations set DEBUG and optimisation explicitly. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release' Or '$(Configuration)' == 'BepInExRelease'">
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'BepInExRelease'">
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'BepInExDebug'">
+    <DefineConstants>$(DefineConstants);DEBUG</DefineConstants>
+    <Optimize>false</Optimize>
+    <DebugType>portable</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Source\**\*.cs" />
+    <Compile Remove="Source\Mod\Entry.Melon.cs" Condition="'$(Loader)' == 'BepInEx'" />
+    <Compile Remove="Source\Mod\Entry.BepInEx.cs" Condition="'$(Loader)' != 'BepInEx'" />
+
+    <!-- The probes are Debug-only. -->
+    <Compile Remove="Source\Probe\**\*.cs" Condition="'$(Configuration)' == 'Release' Or '$(Configuration)' == 'BepInExRelease'" />
+  </ItemGroup>
+
+  <!-- Compile-time references; the loader supplies them at runtime. -->
+  <ItemGroup>
+    <Reference Include="MelonLoader" Condition="'$(Loader)' == 'MelonLoader'">
+      <HintPath>$(LoaderDir)\MelonLoader.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="$(LoaderDir)\Il2CppInterop.Runtime.dll">
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="$(LoaderDir)\Il2CppInterop.Common.dll">
+      <Private>false</Private>
+    </Reference>
+
+    <!-- Interop and Unity types the mod builds against. -->
+    <Reference Include="$(LoaderDir)\Il2Cppmscorlib.dll">
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="$(LoaderDir)\UnityEngine.CoreModule.dll">
+      <Private>false</Private>
+      <Aliases>UnityEngineCore</Aliases>
+    </Reference>
+
+    <!-- The AUTO switch's stopgap row is drawn with IMGUI, which lives in this module. -->
+    <Reference Include="$(LoaderDir)\UnityEngine.IMGUIModule.dll">
+      <Private>false</Private>
+      <Aliases>UnityEngineImgui</Aliases>
+    </Reference>
+  </ItemGroup>
+
+  <!-- BepInEx 6 IL2CPP references. -->
+  <ItemGroup Condition="'$(Loader)' == 'BepInEx'">
+    <Reference Include="BepInEx.Core">
+      <HintPath>$(LoaderDir)\BepInEx.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="BepInEx.Unity.IL2CPP">
+      <HintPath>$(LoaderDir)\BepInEx.Unity.IL2CPP.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="BepInEx.Unity.Common">
+      <HintPath>$(LoaderDir)\BepInEx.Unity.Common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SemanticVersioning">
+      <HintPath>$(LoaderDir)\SemanticVersioning.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>
