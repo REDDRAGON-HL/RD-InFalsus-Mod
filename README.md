@@ -7,7 +7,7 @@ In Falsus 的 mod，都提供 **MelonLoader** 和 **BepInEx 6 IL2CPP** 构建
 | **InFalsusScoreCountdown** | 把游玩界面左上角的当前分换成倒扣分 | 3.0.0 |
 | **InFalsusTextureSwap**    | 运行时替换已加载的立绘             | 1.2.0 |
 | **InFalsusNoIotaLimit**    | 取消 1.0.7 的 9999 粒子总数上限    | 1.0.1 |
-| **CustomSong**             | 从 `Charts/` 加载自制曲包          | 1.0.0 |
+| **CustomSong**             | 从 `Charts/` 加载自制曲包          | 1.1.0 |
 
 ## 目录
 

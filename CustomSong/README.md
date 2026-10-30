@@ -74,11 +74,11 @@ Charts/
 
 1. `lv` 必须是 JSON 数字；
 2. 某个难度有 `chart`，就必须同时有 `charter` 和 `lv`；
-3. `jacket` 必须是曲目文件夹里的 `.png`；`song` 只能是 `.ogg` / `.wav`，且必须是**纯音频**的
+3. `jacket` 必须是曲目文件夹里的 `.png` / `.jpg` / `.jpeg`；`song` 只能是 `.ogg` / `.wav`，且必须是**纯音频**的
    ogg（带视频流的 ogg 播不出来：`ffprobe -show_entries stream=codec_name,codec_type` 只该有一条 `vorbis,audio`）；
 4. `preview_seconds` 必须落在音频时长以内
 
-完整字段说明（含 `illust`、`background`、逐难度差分的写法）见同目录的 `IF.md`。
+完整字段说明（含 `illust`、`background`、逐难度差分的写法）见仓库的 `IF.md`。
 
 
 ## 热重载
@@ -96,6 +96,18 @@ Charts/
 设置页「游戏和UI设置 → 音符设定」最后一行是 `AUTO` 开关（默认**关**，不写盘）。
 
 开启后不会记录成绩、遭遇结果、粒子，掉落栏为 `AUTOPLAY` 字样；
+
+和 **NoIotaLimit** 一起装也没关系：两个 mod 都要接管 `IotaInventory.Add`，一个入口只能有一个生效；
+被它占住时本项目的拦截会跳过并在日志里告警（开 AUTO 时游戏本来也不发放粒子）。
+
+## 与别的 mod 共存
+
+- 钩子在一帧之后才安装，别的 mod 先占住的入口一律让出并写一行日志
+  （`a method at 0x… was already hooked by another mod`），不会去叠第二层 detour。
+- 装了 **In Falsus Practice** 时，帧驱动改走 `LogicalNotePlayer._hb`，不再钩 `_VD._Oz` / `Track.Update`
+  —— 游玩中打开练习模式不会再闪退。
+- `ResultsScene.Start` 被别的 mod（例如 In Falsus Rating）占用时，结算页改由掉落容器装饰，
+  `AUTOPLAY` 灰块照常出现。
 
 
 ## 致谢

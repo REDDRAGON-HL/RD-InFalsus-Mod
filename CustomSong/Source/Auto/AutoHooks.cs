@@ -39,9 +39,15 @@ namespace CustomSong.Auto
             int attempted = 0;
             void Count(bool ok) { attempted++; if (ok) installed++; }
 
-            Count(Attach(ref _oz, "_VD", "_Oz", "_E", 0x5F4620,
-                         (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, double, IntPtr, IntPtr, void>)&OzDetour,
-                         out _ozTramp));
+            _practice = Installed("InFalsusPractice");
+            if (_practice)
+                ModLog.Load("autoplay: In Falsus Practice is installed; the frame tick rides on " +
+                            "LogicalNotePlayer._hb and Track.Update is left alone");
+
+            if (!_practice)
+                Count(Attach(ref _oz, "_VD", "_Oz", "_E", 0x5F4620,
+                             (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, double, IntPtr, IntPtr, void>)&OzDetour,
+                             out _ozTramp));
             Count(Attach(ref _nz, "_VD", "_nz", "_E", 0x5F7A90,
                          (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, IntPtr, IntPtr, byte, IntPtr, IntPtr, byte>)&NzDetour,
                          out _nzTramp));
@@ -54,12 +60,38 @@ namespace CustomSong.Auto
             Count(Attach(ref _trackOnEnable, "Track", "OnEnable", "ifapp.Game.Scenes.Game", 0x66EBC0,
                          (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, void>)&TrackOnEnableDetour,
                          out _trackOnEnableTramp));
-            Count(Attach(ref _trackUpdate, "Track", "Update", "ifapp.Game.Scenes.Game", 0x66EBD0,
-                         (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, void>)&TrackUpdateDetour,
-                         out _trackUpdateTramp));
+            if (!_practice)
+                Count(Attach(ref _trackUpdate, "Track", "Update", "ifapp.Game.Scenes.Game", 0x66EBD0,
+                             (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, void>)&TrackUpdateDetour,
+                             out _trackUpdateTramp));
             ModLog.Load($"autoplay: {installed}/{attempted} hooks installed");
             if (installed < attempted)
                 ModLog.Warn("autoplay: a hook is missing; whatever it drives will silently do nothing");
+        }
+
+        private static bool Installed(string assembly)
+        {
+            try
+            {
+                foreach (System.Reflection.Assembly loaded in AppDomain.CurrentDomain.GetAssemblies())
+                    if (loaded.GetName().Name == assembly) return true;
+            }
+            catch (Exception e)
+            {
+                ModLog.Warn("autoplay: the loaded plugins could not be listed: " + ModLog.Describe(e));
+            }
+
+            return false;
+        }
+
+        private static bool _practice;
+        private static IntPtr _saidEngine;
+
+        internal static void Tick()
+        {
+            if (!_practice || !Writing) return;
+
+            JudgementPoint.KeepOffAll();
         }
 
         internal static void Uninstall()
@@ -163,6 +195,23 @@ namespace CustomSong.Auto
                 try
                 {
                     AutoSong.Observe(lnp, chartTime);
+
+                    if (_practice)
+                    {
+                        IntPtr engine = JudgementPoint.AnyEngine();
+                        if (engine != IntPtr.Zero)
+                        {
+                            if (engine != _saidEngine)
+                            {
+                                _saidEngine = engine;
+                                ModLog.Load($"autoplay: the frame tick runs from _hb (engine 0x{engine.ToInt64():X})");
+                            }
+
+                            AutoSong.FrameAt(engine, chartTime * 1000.0, chartTime);
+                        }
+
+                        JudgementPoint.KeepOffAll();
+                    }
                 }
                 catch (Exception e)
                 {
@@ -180,6 +229,7 @@ namespace CustomSong.Auto
 
             try
             {
+                JudgementPoint.NoteTrack(self);
                 JudgementPoint.SuppressAt(self);
             }
             catch (Exception e)

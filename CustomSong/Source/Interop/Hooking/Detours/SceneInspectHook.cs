@@ -120,6 +120,9 @@ namespace CustomSong
         {
             byte more = _moveNextTramp(self, methodInfo);
             SceneSwitchCalls++;
+
+            if (more == 0) CustomSongCore.RescanSoon();
+
             if (!Memory.LooksLikeObject(self)) return more;
             int state = Memory.I32(self + StateField);
             if (state != SceneSwitchLastState)
@@ -149,8 +152,6 @@ namespace CustomSong
         private delegate void SelectAwakeFn(IntPtr self);
         private static NativeHook<SelectAwakeFn> _selectAwake;
         private static SelectAwakeFn _selectAwakeTramp;
-        private static NativeHook<SelectAwakeFn> _selectGone;
-        private static SelectAwakeFn _selectGoneTramp;
 
         internal static bool InstallSelectAwake()
         {
@@ -158,62 +159,29 @@ namespace CustomSong
             if (awake == IntPtr.Zero)
                 awake = MethodResolver.ByRuntime("SongSelectScene", "Awake", "Game.dll",
                                                  "ifapp.Game.Scenes");
-            IntPtr gone = MethodResolver.ByName("SongSelectScene", "OnDestroy");
-            if (gone == IntPtr.Zero)
-                gone = MethodResolver.ByRuntime("SongSelectScene", "OnDestroy", "Game.dll",
-                                                "ifapp.Game.Scenes");
 
-            if (awake != IntPtr.Zero)
+            if (awake == IntPtr.Zero)
             {
-                _selectAwake = new NativeHook<SelectAwakeFn>
-                {
-                    Target = awake,
-                    Detour = (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, void>)&SelectAwakeDetour,
-                };
-                _selectAwake.Attach();
-                _selectAwakeTramp = _selectAwake.Trampoline;
-            }
-
-            if (gone == IntPtr.Zero)
-            {
-                ModLog.Warn("SongSelectScene.OnDestroy could not be resolved; a new song needs a restart");
+                ModLog.Warn("SongSelectScene.Awake could not be resolved; a new song needs a restart");
                 return false;
             }
 
-            _selectGone = new NativeHook<SelectAwakeFn>
+            _selectAwake = new NativeHook<SelectAwakeFn>
             {
-                Target = gone,
-                Detour = (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, void>)&SelectGoneDetour,
+                Target = awake,
+                Detour = (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, void>)&SelectAwakeDetour,
             };
-            _selectGone.Attach();
-            _selectGoneTramp = _selectGone.Trampoline;
-            ModLog.Load($"hot reload: the song-select page is watched (awake={(awake != IntPtr.Zero ? "yes" : "no")})");
+            _selectAwake.Attach();
+            _selectAwakeTramp = _selectAwake.Trampoline;
+            ModLog.Load("hot reload: the song-select page is watched");
             return true;
         }
 
         internal static void DetachSelectAwake()
         {
-            _selectGone?.Detach();
-            _selectGone = null;
-            _selectGoneTramp = null;
             _selectAwake?.Detach();
             _selectAwake = null;
             _selectAwakeTramp = null;
-        }
-
-        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-        private static void SelectGoneDetour(IntPtr self)
-        {
-            _selectGoneTramp(self);
-
-            try
-            {
-                CustomSongCore.RescanSoon();
-            }
-            catch (Exception e)
-            {
-                ModLog.Warn($"hot reload hook failed: {ModLog.Describe(e)}");
-            }
         }
 
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]

@@ -58,7 +58,24 @@ namespace CustomSong
         private static int _barButtons = 0x28;
         private static bool _resolved;
         private static bool _failed;
-        internal static bool Present => Memory.LooksLikeObject(_row);
+        private static int _attempts;
+
+        internal static bool Present
+        {
+            get
+            {
+                if (!Memory.LooksLikeObject(_row)) return false;
+
+                try
+                {
+                    return new Component(_row).gameObject != null;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+        }
 
         internal static void Attach(IntPtr panel)
         {
@@ -78,6 +95,13 @@ namespace CustomSong
         {
             if (Present && _late > 0 && --_late == 0) Refresh();
             if (Present && _repaint > 0 && --_repaint == 0) Apply();
+
+            if (!Present && !_failed && _panel != IntPtr.Zero && _attempts < 4)
+            {
+                _pending = _panel;
+                _attempts++;
+            }
+
             if (_pending == IntPtr.Zero || _failed) return;
 
             try
@@ -98,6 +122,7 @@ namespace CustomSong
             {
                 if (!Build(panel)) return;
                 _panel = panel;
+                _attempts = 0;
                 Apply();
             }
             catch (Exception e)

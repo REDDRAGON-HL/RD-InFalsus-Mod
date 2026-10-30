@@ -37,7 +37,12 @@ namespace CustomSong.Auto
         internal static void Frame(IntPtr engine, double seconds)
         {
             if (!Memory.LooksLikeObject(engine)) return;
-            double nowMs = Memory.F64(engine + AutoOffsets.Engine.ChartTime) * 1000.0;
+            FrameAt(engine, Memory.F64(engine + AutoOffsets.Engine.ChartTime) * 1000.0, seconds);
+        }
+
+        internal static void FrameAt(IntPtr engine, double nowMs, double seconds)
+        {
+            if (!Memory.LooksLikeObject(engine)) return;
             if (nowMs <= 0.0) return;
             double dropMs = Current._lastMs - nowMs;
 

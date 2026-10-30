@@ -31,8 +31,10 @@ namespace CustomSong.Auto
         private static StartFn _startTramp;
         private static NativeHook<StartFn> _destroy;
         private static StartFn _destroyTramp;
-        private static NativeHook<AddFn> _add;
-        private static AddFn _addTramp;
+        private static NativeHook<StartFn> _containerAwake;
+        private static StartFn _containerAwakeTramp;
+        private static IntPtr _container;
+        private static bool _decorated;
         private static TextFn _setText;
         private static int _drops;
         private static int _failed;
@@ -126,6 +128,8 @@ namespace CustomSong.Auto
 
             Count(Attach(ref _destroy, "ResultsScene", "OnDestroy", "ifapp.Game.Scenes", RvaResultsDestroy,
                          (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, void>)&DestroyDetour, out _destroyTramp));
+            Count(Attach(ref _containerAwake, "IotaDropsContainer", "Awake", "ifapp.Game.Scenes", 0x71E0C0,
+                         (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, void>)&ContainerAwakeDetour, out _containerAwakeTramp));
             IntPtr text = StringSetter();
 
             if (text != IntPtr.Zero)
@@ -175,7 +179,8 @@ namespace CustomSong.Auto
         internal static void Uninstall()
         {
             _start?.Detach(); _start = null; _startTramp = null;
-            _add?.Detach(); _add = null; _addTramp = null;
+            _destroy?.Detach(); _destroy = null; _destroyTramp = null;
+            _containerAwake?.Detach(); _containerAwake = null; _containerAwakeTramp = null;
             _asked = false;
         }
 
@@ -213,25 +218,9 @@ namespace CustomSong.Auto
             }
             if (target == IntPtr.Zero) return false;
             hook = new NativeHook<T> { Target = target, Detour = detour };
-            hook.Attach();
+            if (!hook.Attach()) return false;
             trampoline = hook.Trampoline;
             return true;
-        }
-
-        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-        private static void AddDetour(IntPtr self, Iota instance, IntPtr methodInfo)
-        {
-            if (AutoMark.Ran) return;
-
-            try
-            {
-                _addTramp(self, instance, methodInfo);
-            }
-            catch (Exception e)
-            {
-                ModLog.Error("autoplay: the inventory threw while taking a particle: " +
-                             ModLog.Describe(e));
-            }
         }
 
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
@@ -255,6 +244,7 @@ namespace CustomSong.Auto
             {
                 Plain(self);
                 Decorate(self);
+                _decorated = true;
             }
             catch (Exception e)
             {
@@ -274,6 +264,84 @@ namespace CustomSong.Auto
                 ModLog.Error("autoplay: the results screen threw while it was going away: " +
                              ModLog.Describe(e));
             }
+            OnLeavingResults();
+        }
+
+        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+        private static void ContainerAwakeDetour(IntPtr self)
+        {
+            _containerAwakeTramp(self);
+
+            if (!AutoMark.Ran || _decorated) return;
+
+            _container = Memory.LooksLikeObject(self) ? self : IntPtr.Zero;
+        }
+
+        internal static void Poll()
+        {
+            if (_decorated) return;
+            if (_container == IntPtr.Zero) return;
+
+            IntPtr container = _container;
+            _container = IntPtr.Zero;
+
+            if (!AutoMark.Ran) return;
+
+            IntPtr scene = SceneAbove(container);
+
+            try
+            {
+                ModLog.Load("autoplay: the results screen is up (from its drop container)");
+
+                if (scene != IntPtr.Zero) Plain(scene);
+                else ModLog.Load("autoplay: the screen object was not found above the drop container; " +
+                                 "only the drop row is marked");
+
+                DecorateAt(container);
+                _decorated = true;
+            }
+            catch (Exception e)
+            {
+                ModLog.WarnRelease("autoplay: the results screen could not be marked: " + ModLog.Describe(e));
+            }
+        }
+
+        private static IntPtr SceneAbove(IntPtr component)
+        {
+            try
+            {
+                Transform at = new Component(component).transform;
+                if (at == null) return IntPtr.Zero;
+
+                while (at.parent != null) at = at.parent;
+
+                GameObject root = at.gameObject;
+                if (root == null) return IntPtr.Zero;
+
+                foreach (Component part in root.GetComponentsInChildren<Component>(true))
+                {
+                    if (part == null) continue;
+
+                    IntPtr klass = Il2CppInterop.Runtime.IL2CPP.il2cpp_object_get_class(part.Pointer);
+                    if (klass == IntPtr.Zero) continue;
+                    if (Il2CppInterop.Runtime.IL2CPP.il2cpp_class_get_name_(klass) == "ResultsScene")
+                        return part.Pointer;
+                }
+            }
+            catch (Exception e)
+            {
+                ModLog.WarnRelease("autoplay: the screen could not be found from its drop container: " +
+                                   ModLog.Describe(e));
+            }
+
+            return IntPtr.Zero;
+        }
+
+        internal static void OnLeavingResults()
+        {
+            _decorated = false;
+            _container = IntPtr.Zero;
+
             AutoMark.Ran = false;
             ScoreStore.EncounterRan = false;
             BlockParticles(false);
@@ -317,6 +385,20 @@ namespace CustomSong.Auto
                 ModLog.WarnRelease("autoplay: the results screen has no drop container to mark");
                     return;
             }
+
+            int shown = 0;
+            shown += Show(container, _failed, true);
+            shown += Show(container, _assist, false);
+            shown += Show(container, _left, false);
+            shown += Show(container, _right, false);
+            shown += HideCells(container);
+            int texts = WriteTexts(container);
+            ModLog.Load($"autoplay: results marked ({shown} object(s) switched, {texts} text(s))");
+        }
+
+        private static void DecorateAt(IntPtr container)
+        {
+            if (!Memory.LooksLikeObject(container)) return;
 
             int shown = 0;
             shown += Show(container, _failed, true);

@@ -94,6 +94,8 @@ namespace CustomSong.Auto
         {
             try
             {
+                if (Memory.Text(unloadName) == ResultsScene) AutoResults.OnLeavingResults();
+
                 if (Redirects(unloadName, loadName, out IntPtr destination))
                     return _transitionTramp(self, flags, unloadName, destination,
                                             IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);

@@ -9,7 +9,7 @@ namespace CustomSong
     internal static partial class IfReader
     {
         private static readonly string[] AudioExtensions = { ".wav", ".mp3", ".ogg" };
-        private static readonly string[] ImageExtensions = { ".png" };
+        private static readonly string[] ImageExtensions = { ".png", ".jpg", ".jpeg" };
         private static readonly string[] BackgroundExtensions = { ".png", ".mp4" };
         internal const string InfoFileName = "if";
 

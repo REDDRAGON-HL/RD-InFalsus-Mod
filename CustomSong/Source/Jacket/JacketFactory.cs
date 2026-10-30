@@ -75,6 +75,9 @@ namespace CustomSong
         private static readonly Dictionary<string, IntPtr> Built =
             new Dictionary<string, IntPtr>(StringComparer.Ordinal);
 
+        private static Png.Image Decode(byte[] bytes, out string reason) =>
+            Jpeg.Looks(bytes) ? Jpeg.Decode(bytes, out reason) : Png.Decode(bytes, out reason);
+
         private static IntPtr BuildUncached(string pngPath, string what, out string reason)
         {
             reason = null;
@@ -102,7 +105,7 @@ namespace CustomSong
                 return IntPtr.Zero;
             }
 
-            Png.Image image = Png.Decode(bytes, out reason);
+            Png.Image image = Decode(bytes, out reason);
             if (image == null) return IntPtr.Zero;
             IntPtr texture = BuildTexture(image, out reason);
             if (texture == IntPtr.Zero) return IntPtr.Zero;
@@ -146,7 +149,7 @@ namespace CustomSong
                 return IntPtr.Zero;
             }
 
-            Png.Image image = Png.Decode(bytes, out reason);
+            Png.Image image = Decode(bytes, out reason);
             if (image == null) return IntPtr.Zero;
             IntPtr texture = BuildTexture(image, out reason);
             if (texture == IntPtr.Zero) return IntPtr.Zero;

@@ -7,7 +7,7 @@ namespace CustomSong
 {
     internal static class CustomSongCore
     {
-        internal const string Version = "1.0.0";
+        internal const string Version = "1.1.0";
         private static List<ChartPack> _packs = new List<ChartPack>();
         private static bool _registered;
         private static bool _packVisualsDone;
@@ -45,11 +45,6 @@ namespace CustomSong
                 ModLog.Load($"packs: {_packs.Count}, charts: {total}");
 
                 ChartPoolPatch.Apply();
-                Hooks.Install();
-                AutoSwitchHook.Install();
-                AutoRowHooks.Install();
-                Auto.AutoHooks.Install();
-                Auto.AutoResults.Install();
             }
             catch (Exception e)
             {
@@ -59,9 +54,13 @@ namespace CustomSong
 
         internal static void Update()
         {
+            if (!_hooksInstalled) InstallHooks();
+
             VideoBackground.Follow();
             AutoSwitch.NoteOpen("frame");
             AutoRow.Tick();
+            Auto.AutoHooks.Tick();
+            Auto.AutoResults.Poll();
 
             if (_rescanIn > 0 && --_rescanIn == 0) HotReloadIfChanged();
 
@@ -101,6 +100,18 @@ namespace CustomSong
                 ModLog.Error($"registering the custom songs failed: {ModLog.Describe(e)}");
             }
         }
+
+        private static void InstallHooks()
+        {
+            _hooksInstalled = true;
+            Hooks.Install();
+            AutoSwitchHook.Install();
+            AutoRowHooks.Install();
+            Auto.AutoHooks.Install();
+            Auto.AutoResults.Install();
+        }
+
+        private static bool _hooksInstalled;
 
         internal static void RescanSoon()
         {
