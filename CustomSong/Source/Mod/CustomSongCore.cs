@@ -7,7 +7,7 @@ namespace CustomSong
 {
     internal static class CustomSongCore
     {
-        internal const string Version = "1.1.0";
+        internal const string Version = "1.1.1";
         private static List<ChartPack> _packs = new List<ChartPack>();
         private static bool _registered;
         private static bool _packVisualsDone;
@@ -73,6 +73,12 @@ namespace CustomSong
             if (_registered)
             {
                 if (!_packVisualsDone) ApplyPackVisuals();
+                if (!_studioHunted)
+                {
+                    _studioHunted = true;
+                    StudioProject.Generate(_root, RescanSoon);
+                }
+
                 return;
             }
 
@@ -113,6 +119,8 @@ namespace CustomSong
 
         private static bool _hooksInstalled;
 
+        private static bool _studioHunted;
+
         internal static void RescanSoon()
         {
             if (_rescanIn <= 0) _rescanIn = 2;
@@ -127,6 +135,7 @@ namespace CustomSong
             {
                 _packs = ChartFolderLibrary.ImportPacks(_root, Validate);
                 _fingerprint = current;
+                StudioProject.Generate(_root, RescanSoon);
                 return;
             }
 
@@ -143,6 +152,7 @@ namespace CustomSong
 
                 _packs = ChartFolderLibrary.ImportPacks(_root, Validate);
                 _fingerprint = current;
+                StudioProject.Generate(_root, RescanSoon);
 
                 if (_packs.Count == 0)
                 {

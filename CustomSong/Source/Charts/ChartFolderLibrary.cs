@@ -10,6 +10,10 @@ namespace CustomSong
     {
         private const string FolderName = "Charts";
 
+        private const string DefaultPack = "Custom Song";
+
+        private static string _located;
+
         internal static string ModFolder()
         {
             try
@@ -24,13 +28,44 @@ namespace CustomSong
             return null;
         }
 
+        private static string GameFolder()
+        {
+#if BEPINEX
+            try
+            {
+                string root = BepInEx.Paths.GameRootPath;
+                if (!string.IsNullOrEmpty(root)) return root;
+            }
+            catch (Exception e)
+            {
+                ModLog.Warn($"could not ask BepInEx for the game folder: {ModLog.Describe(e)}");
+            }
+#endif
+            try
+            {
+                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                if (!string.IsNullOrEmpty(baseDir))
+                    return baseDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            }
+            catch (Exception e)
+            {
+                ModLog.Warn($"could not read the process's base directory: {ModLog.Describe(e)}");
+            }
+
+            return null;
+        }
+
         internal static string Locate()
         {
+            if (_located != null) return _located;
+
             string mod = ModFolder();
             if (mod == null) return null;
             DirectoryInfo parent = Directory.GetParent(mod);
+            string game = GameFolder();
             string[] candidates =
             {
+                game == null ? null : Path.GetFullPath(Path.Combine(game, FolderName)),
 #if BEPINEX
                 parent?.Parent == null
                     ? null
@@ -45,6 +80,8 @@ namespace CustomSong
                 if (candidate == null) continue;
                 if (Directory.Exists(candidate))
                 {
+                    _located = candidate;
+                    ModLog.Load($"{FolderName} folder: {candidate}");
                     return candidate;
                 }
             }
@@ -59,6 +96,9 @@ namespace CustomSong
             try
             {
                 Directory.CreateDirectory(preferred);
+                Directory.CreateDirectory(Path.Combine(preferred, DefaultPack));
+                _located = preferred;
+                ModLog.Load($"{FolderName} folder: {preferred} (created)");
                 return preferred;
             }
             catch (Exception e)
@@ -69,56 +109,12 @@ namespace CustomSong
             }
         }
 
-        internal static List<ChartInfo> Import(string root, Func<ChartInfo, string> validateCharts)
-        {
-            var imported = new List<ChartInfo>();
-            if (string.IsNullOrEmpty(root) || !Directory.Exists(root))
-            {
-                ModLog.Warn($"no {FolderName} folder at {root}; nothing to load");
-                return imported;
-            }
-
-            string[] folders;
-            try
-            {
-                folders = Directory.GetDirectories(root);
-                Array.Sort(folders, StringComparer.OrdinalIgnoreCase);
-            }
-            catch (Exception e)
-            {
-                ModLog.Warn($"{root} could not be listed: {ModLog.Describe(e)}");
-                return imported;
-            }
-
-            foreach (string folder in folders)
-            {
-                string name = Path.GetFileName(folder);
-
-                if (!IfReader.TryRead(folder, out ChartInfo info, out string reason))
-                {
-                    ModLog.Warn($"chart folder '{name}' skipped: {reason}");
-                    continue;
-                }
-
-                reason = validateCharts(info);
-                if (reason != null)
-                {
-                    ModLog.Warn($"chart folder '{name}' skipped: {reason}");
-                    continue;
-                }
-
-                imported.Add(info);
-            }
-
-            return imported;
-        }
-
         internal static List<ChartPack> ImportPacks(string root, Func<ChartInfo, string> validateCharts)
         {
             var packs = new List<ChartPack>();
             if (string.IsNullOrEmpty(root) || !Directory.Exists(root))
             {
-                ModLog.Warn($"no {FolderName} folder at {root}; nothing to load");
+                ModLog.WarnRelease($"no {FolderName} folder at {root}; nothing to load");
                 return packs;
             }
 
@@ -130,9 +126,11 @@ namespace CustomSong
             }
             catch (Exception e)
             {
-                ModLog.Warn($"{root} could not be listed: {ModLog.Describe(e)}");
+                ModLog.WarnRelease($"{root} could not be listed: {ModLog.Describe(e)}");
                 return packs;
             }
+
+            if (folders.Length == 0) ModLog.WarnRelease($"'{root}' has no pack folder inside it");
 
             foreach (string folder in folders)
             {
@@ -159,12 +157,21 @@ namespace CustomSong
 
                 foreach (string song in songs)
                 {
-                    if (!File.Exists(Path.Combine(song, "if"))) continue;
+                    if (!File.Exists(Path.Combine(song, "if")))
+                    {
+                        string deeper = Nested(song);
+                        ModLog.WarnRelease(deeper == null
+                            ? $"chart folder '{Path.GetFileName(song)}' has no if; skipped"
+                            : $"chart folder '{Path.GetFileName(song)}' has no if, but its '{deeper}' " +
+                              "does; the song is one folder too deep");
+                        continue;
+                    }
+
                     AddSong(pack, song, validateCharts);
                 }
 
                 if (pack.Charts.Count > 0) packs.Add(pack);
-                else ModLog.Warn($"pack folder '{name}' has no chart folder; skipped");
+                else ModLog.WarnRelease($"pack folder '{name}' has no chart folder; skipped");
             }
 
             int songsTotal = 0;
@@ -234,6 +241,22 @@ namespace CustomSong
             if (extension != ".png" && extension != ".jpg" && extension != ".jpeg") return null;
             string path = Path.Combine(folder, name);
             return File.Exists(path) ? path : null;
+        }
+
+        private static string Nested(string folder)
+        {
+            try
+            {
+                foreach (string inner in Directory.GetDirectories(folder))
+                    if (File.Exists(Path.Combine(inner, IfReader.InfoFileName)))
+                        return Path.GetFileName(inner);
+            }
+            catch (Exception e)
+            {
+                ModLog.Warn($"'{folder}' could not be listed: {ModLog.Describe(e)}");
+            }
+
+            return null;
         }
 
         private static void AddSong(ChartPack pack, string folder, Func<ChartInfo, string> validateCharts)
