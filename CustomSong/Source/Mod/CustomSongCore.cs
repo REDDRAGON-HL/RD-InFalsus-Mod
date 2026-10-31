@@ -309,7 +309,7 @@ namespace CustomSong
             string extension = Path.GetExtension(path).ToLowerInvariant();
             return extension == ".spc" || extension == ".ogg" || extension == ".mp3" ||
                    extension == ".wav" || extension == ".png" || extension == ".jpg" ||
-                   extension == ".jpeg" || extension == ".mp4";
+                   extension == ".jpeg" || extension == ".mp4" || extension == FalsumSong.Extension;
         }
 
         private static string Validate(ChartInfo info)

@@ -15,7 +15,8 @@ In Falsus 的自制谱加载 Mod
 - **大谱面**：放宽了游戏的谱面池容量
 - **整套曲包贴图**：曲包大卡片 / 未选中卡片 / 右侧进度条目 / 选曲页横幅，7 张图分别指定
 - **AUTOPLAY**：设置页「音符设定」最后一行有开关；开启后不记录成绩、遭遇结果、粒子掉落
-- 自动识别 `infalsus.studio.json` 文件生成 `if`
+- **支持 `.falsum` 压缩包**：自动解包成曲目文件夹并生成 `if`
+- 自动识别 `.json` 文件生成 `if`
 
 
 ## 手动安装
@@ -56,6 +57,8 @@ Charts/
   }
 }
 ```
+
+不写 `pack.json` 时自动使用文件夹名作为曲包名
 
 ### `if`
 
@@ -100,15 +103,6 @@ Charts/
 
 和 **NoIotaLimit** 一起装也没关系：两个 mod 都要接管 `IotaInventory.Add`，一个入口只能有一个生效；
 被它占住时本项目的拦截会跳过并在日志里告警（开 AUTO 时游戏本来也不发放粒子）。
-
-## 与别的 mod 共存
-
-- 钩子在一帧之后才安装，别的 mod 先占住的入口一律让出并写一行日志
-  （`a method at 0x… was already hooked by another mod`），不会去叠第二层 detour。
-- 装了 **In Falsus Practice** 时，帧驱动改走 `LogicalNotePlayer._hb`，不再钩 `_VD._Oz` / `Track.Update`
-  —— 游玩中打开练习模式不会再闪退。
-- `ResultsScene.Start` 被别的 mod（例如 In Falsus Rating）占用时，结算页改由掉落容器装饰，
-  `AUTOPLAY` 灰块照常出现。
 
 
 ## 致谢

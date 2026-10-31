@@ -20,7 +20,7 @@ namespace CustomSong
             Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         };
 
-        private static string Serialize(JsonNode document)
+        internal static string Serialize(JsonNode document)
         {
             using var stream = new MemoryStream();
 
@@ -84,6 +84,7 @@ namespace CustomSong
             var level = new JsonArray();
             var jacket = new JsonArray();
             var illust = new JsonArray();
+            string songJacket = PictureAt(folder, Text(root, "jacket"));
             int taken = 0;
 
             if (root.TryGetProperty("difficulties", out JsonElement list) &&
@@ -114,7 +115,11 @@ namespace CustomSong
                     }
 
                     string own = Text(item, "jacket");
-                    jacket.Add(Filed(folder, own) ? own : Filed(folder, Text(root, "jacket")) ? Text(root, "jacket") : null);
+                    string ownPicture = PictureAt(folder, own);
+                    if (!string.IsNullOrWhiteSpace(own) && ownPicture == null)
+                        ModLog.WarnRelease($"'{Path.GetFileName(folder)}': the jacket '{own}' is not in the " +
+                                           "folder; the song's own picture is used instead");
+                    jacket.Add(ownPicture ?? songJacket);
                     string drawn = Text(item, "jacketDesigner");
                     illust.Add(string.IsNullOrEmpty(drawn) ? null : drawn);
                     slot++;
@@ -126,9 +131,21 @@ namespace CustomSong
                 chart.Add(null);
                 charter.Add(null);
                 level.Add(null);
-                jacket.Add(Filed(folder, Text(root, "jacket")) ? Text(root, "jacket") : null);
+                jacket.Add(songJacket);
                 illust.Add(null);
             }
+
+            string named = null;
+            foreach (JsonNode value in jacket)
+                if (value != null)
+                {
+                    named = value.GetValue<string>();
+                    break;
+                }
+
+            if (named != null)
+                for (int i = 0; i < jacket.Count; i++)
+                    if (jacket[i] == null) jacket[i] = named;
 
             if (taken == 0)
             {
@@ -194,6 +211,12 @@ namespace CustomSong
                 return;
             }
 
+            DefaultPreview(length, out start, out end);
+        }
+
+        internal static void DefaultPreview(int length, out float start, out float end)
+        {
+            float limit = length > 1 ? length - 1f : 0f;
             start = 0f;
             end = length > 2 ? Math.Min(FallbackPreviewSeconds, limit) : Math.Max(length, 1);
         }
@@ -217,11 +240,13 @@ namespace CustomSong
             string relative = working.Replace('\\', '/');
             string source = Path.GetFullPath(Path.Combine(folder, relative.Replace('/', Path.DirectorySeparatorChar)));
             string name = Path.GetFileName(source);
-            if (name.Length == 0 || !File.Exists(source)) return null;
+            if (name.Length == 0) return null;
+            string beside = Path.Combine(folder, name);
+            if (!File.Exists(source)) return File.Exists(beside) ? name : null;
 
             if (relative.StartsWith(WorkFolder + "/", StringComparison.OrdinalIgnoreCase))
             {
-                string target = Path.Combine(folder, name);
+                string target = beside;
                 if (!File.Exists(target))
                 {
                     File.Move(source, target);
@@ -237,8 +262,29 @@ namespace CustomSong
                 : null;
         }
 
-        private static bool Filed(string folder, string name) =>
-            !string.IsNullOrEmpty(name) && File.Exists(Path.Combine(folder, name));
+        private static string PictureAt(string folder, string name)
+        {
+            if (string.IsNullOrEmpty(name)) return null;
+            string area = Path.GetFullPath(folder);
+            string source = Path.GetFullPath(Path.Combine(area, name.Replace('\\', '/')
+                                                                    .Replace('/', Path.DirectorySeparatorChar)));
+            string bare = Path.GetFileName(source);
+            if (bare.Length == 0) return null;
+            string target = Path.Combine(area, bare);
+            if (!File.Exists(source)) return File.Exists(target) ? bare : null;
+
+            if (!source.StartsWith(area + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            if (!string.Equals(source, target, StringComparison.OrdinalIgnoreCase) && !File.Exists(target))
+            {
+                File.Move(source, target);
+                ModLog.Load($"'{Path.GetFileName(folder)}': moved '{bare}' out of " +
+                            $"{Path.GetDirectoryName(name)}");
+            }
+
+            return bare;
+        }
 
         private static string Text(JsonElement item, string key) =>
             item.ValueKind == JsonValueKind.Object &&

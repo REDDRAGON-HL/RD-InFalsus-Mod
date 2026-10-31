@@ -129,6 +129,17 @@ namespace CustomSong
 
             if (folders.Length == 0) ModLog.WarnRelease($"'{root}' has no pack folder inside it");
 
+            try
+            {
+                foreach (string archive in Directory.GetFiles(root, "*" + FalsumSong.Extension))
+                    ModLog.WarnRelease($"'{Path.GetFileName(archive)}' is directly under Charts; " +
+                                       "put it inside a pack folder instead");
+            }
+            catch (Exception e)
+            {
+                ModLog.Warn($"{root} could not be listed for archives: {ModLog.Describe(e)}");
+            }
+
             foreach (string folder in folders)
             {
                 string name = Path.GetFileName(folder);
@@ -143,6 +154,8 @@ namespace CustomSong
                 string[] songs;
                 try
                 {
+                    foreach (string archive in Directory.GetFiles(folder, "*" + FalsumSong.Extension))
+                        FalsumSong.Import(archive);
                     songs = Directory.GetDirectories(folder);
                     Array.Sort(songs, StringComparer.OrdinalIgnoreCase);
                 }
