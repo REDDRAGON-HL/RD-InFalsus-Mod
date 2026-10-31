@@ -8,6 +8,7 @@ namespace CustomSong
         internal string Folder;
         internal string Name;
         internal string[] Names;
+        internal string[] Titles;
         internal string Composer;
         internal string[] Composers;
         internal string[] Illustrators;

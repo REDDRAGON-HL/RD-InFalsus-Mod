@@ -54,6 +54,7 @@ namespace CustomSong
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static void MusicPauseDetour(IntPtr self, double at, IntPtr methodInfo)
         {
+            Alive(Hook.MusicPause);
             MusicPauses++;
             _musicPauseTramp(self, at, methodInfo);
 
@@ -73,6 +74,7 @@ namespace CustomSong
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static void MusicResumeDetour(IntPtr self, float volume, double time, IntPtr methodInfo)
         {
+            Alive(Hook.MusicResume);
             MusicResumes++;
             _musicResumeTramp(self, volume, time, methodInfo);
 

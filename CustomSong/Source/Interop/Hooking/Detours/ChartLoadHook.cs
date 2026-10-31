@@ -36,6 +36,7 @@ namespace CustomSong
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static IntPtr VaDetour(IntPtr result, IntPtr name, IntPtr methodInfo)
         {
+            Alive(Hook.ChartLoader);
             VaCalls++;
 
             if (!Faulted)

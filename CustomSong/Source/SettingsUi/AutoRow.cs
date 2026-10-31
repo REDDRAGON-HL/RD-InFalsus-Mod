@@ -58,7 +58,6 @@ namespace CustomSong
         private static int _barButtons = 0x28;
         private static bool _resolved;
         private static bool _failed;
-        private static int _attempts;
 
         internal static bool Present
         {
@@ -76,6 +75,8 @@ namespace CustomSong
                 }
             }
         }
+
+        private static int _attempts;
 
         internal static void Attach(IntPtr panel)
         {
@@ -124,6 +125,9 @@ namespace CustomSong
                 _panel = panel;
                 _attempts = 0;
                 Apply();
+
+                ModLog.Load($"AUTO row: added below the boss-VFX row " +
+                            $"(id={Memory.U16(RowSelf() + _c2dId)}, {Queued()} pending)");
             }
             catch (Exception e)
             {
@@ -176,6 +180,9 @@ namespace CustomSong
             Memory.WriteI32(row + _barValue, sourceValue > 0 ? sourceValue : 1);
             Memory.WritePtr(row + _barTooltip, Memory.Ptr(source + _barTooltip));
 
+            ModLog.Load($"AUTO row: value {Memory.I32(row + _barValue)} (source {sourceValue}), " +
+                        $"selected={Id(Memory.Ptr(row + _barSelected))}, " +
+                        $"tooltip={Id(Memory.Ptr(row + _barTooltip))}");
             MakeRoom(parent, parent.localPosition.y, pitch);
             if (_wire != null) _wire(row, panel, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
             int registered = Register(clone);
@@ -186,7 +193,10 @@ namespace CustomSong
             }
 
             int synced = Sync(sourceObject.transform, clone.transform);
+            ModLog.Load($"AUTO row: {synced} part(s) took their renderer state from " +
+                        $"'{(sourceObject == null ? "?" : sourceObject.name)}'");
             int dressed = Dress(clone);
+            ModLog.Load($"AUTO row: {dressed} part(s) were given a material");
             Owning(clone, row, sourceObject, panel);
             IntPtr container = Find(parent.gameObject, "Constrained2D");
             if (container != IntPtr.Zero && _touch != null) _touch(container, IntPtr.Zero);
@@ -199,11 +209,16 @@ namespace CustomSong
                 _scroll = scroll;
                 _bound = Memory.F32(scroll + ScrollBound) + step;
                 Stretch();
+                ModLog.Load($"AUTO row: scroll bound {_bound - step:F1} -> {_bound:F1}");
             }
 
             _row = row;
             _clone = created.Pointer;
             _late = 10;
+            ModLog.Load($"AUTO row: {registered} element(s) in the batch, pitch {pitch:F5}, " +
+                        $"y {anchorY:F3} -> {anchorY + pitch:F3}, " +
+                        $"buttons {(_wire != null ? "wired" : "not wired")}");
+            Dump(source, anchor, clone);
             return true;
         }
 
@@ -220,6 +235,8 @@ namespace CustomSong
                 float theirs = above == IntPtr.Zero ? 0f : Memory.F32(above + _c2dOffsetY);
                 float gap = mine - theirs;
 
+                ModLog.Load($"AUTO row: pitch from '{(previous == null ? "?" : previous.gameObject.name)}': " +
+                            $"offsetY {theirs:F4} -> {mine:F4} (gap {gap:F4})");
                 if (above != IntPtr.Zero && gap != 0f) return gap;
             }
 
@@ -241,6 +258,8 @@ namespace CustomSong
                 Memory.WriteF32(c2d + _c2dOffsetY, Memory.F32(c2d + _c2dOffsetY) + pitch);
                 moved++;
             }
+
+            if (moved > 0) ModLog.Load($"AUTO row: {moved} section(s) moved by {pitch:F5}");
         }
 
         private static int Register(GameObject clone)
@@ -277,6 +296,13 @@ namespace CustomSong
                 if (live.Contains(c2d)) found++;
             }
 
+            ModLog.Load($"AUTO row: {c2ds.Count} component(s), placed {placed}, queued {queued}, " +
+                        $"in batch {found}, with id {ids}, " +
+                        $"slots {Memory.I32(statics + BatchMainCount)}" +
+                        $"/{Memory.I32(statics + BatchOtherCount)}, " +
+                        $"arrays {ArrayLength(Memory.Ptr(statics + BatchMain))}" +
+                        $"/{ArrayLength(Memory.Ptr(statics + BatchOther))}, " +
+                        $"restored {off.Count}, enabled {asleep.Count}");
             Restore(off);
             Recompute();
             return found;
@@ -461,6 +487,7 @@ namespace CustomSong
                 if (!_applied)
                 {
                     _applied = true;
+                    ModLog.Load($"AUTO row: shown {(AutoSwitch.On ? "on" : "off")}");
                 }
             }
             catch (Exception e)
@@ -513,10 +540,15 @@ namespace CustomSong
 
                 if (moved) Memory.WritePtr(row + _barButtons, fresh);
 
+                ModLog.Load($"AUTO row: {length} button(s), {inside} of this row's, {wired} wired" +
+                            $"{(moved ? ", list rebuilt" : "")}");
+
                 for (int i = 0; i < length; i++)
                 {
                     IntPtr button = Memory.Ptr(Memory.Ptr(row + _barButtons) +
                                                Offsets.Runtime.ArrayDataOffset + i * IntPtr.Size);
+                    ModLog.Load($"AUTO row:   button {i} '{Name(button)}' " +
+                                $"callback={(Memory.LooksLikeObject(Memory.Ptr(button + 0x30)) ? "yes" : "no")}");
                 }
 
                 if (moved && _wire != null) _wire(row, panel, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
@@ -588,6 +620,7 @@ namespace CustomSong
                 }
 
                 Recompute();
+                ModLog.Load($"AUTO row: {queued} part(s) registered again");
             }
             catch (Exception e)
             {
@@ -790,6 +823,8 @@ namespace CustomSong
 
             if (taken.Length == 0) return false;
 
+            ModLog.Load($"AUTO row: part '{Name(to)}' differs from the one it was cloned from:" +
+                        taken);
             return true;
         }
 
@@ -802,6 +837,271 @@ namespace CustomSong
         }
 
         private static IntPtr RowSelf() => Present ? Memory.Ptr(_row + _barSelf) : IntPtr.Zero;
+
+        private static void Dump(IntPtr source, IntPtr anchor, GameObject clone)
+        {
+            try
+            {
+                IntPtr statics = WiStatics();
+                if (statics == IntPtr.Zero) return;
+                ModLog.Load("AUTO row: " + Describe(statics, Memory.Ptr(source + _barSelf), "source"));
+                ModLog.Load("AUTO row: " + Describe(statics, Memory.Ptr(anchor + _barSelf), "anchor"));
+                ModLog.Load("AUTO row: " + Describe(statics, RowSelf(), "ours"));
+                int seen = 0, opaque = 0, masked = 0;
+                foreach (IntPtr c2d in C2Ds(clone))
+                {
+                    bool main;
+                    int slot = Slot(statics, c2d, out main);
+                    if (slot < 0) continue;
+                    IntPtr at = Calc(statics, main, slot);
+                    seen++;
+                    if (Memory.F32(at + 0x10) > 0f) opaque++;
+                    if (Memory.I32(at + 0x34) >= 0) masked++;
+                }
+
+                ModLog.Load($"AUTO row: {seen} element(s) with a slot, {opaque} with opacity, " +
+                            $"{masked} with a mask index");
+                GameObject sourceObject = new Component(source).gameObject;
+                if (sourceObject != null)
+                    ModLog.Load("AUTO row: source parts " + Parts(statics, sourceObject));
+                ModLog.Load("AUTO row: our parts    " + Parts(statics, clone));
+                IntPtr selected = Memory.Ptr(_row + _barSelected);
+                ModLog.Load("AUTO row: selected " + Subtree(selected));
+                ModLog.Load("AUTO row: its own  " + Describe(statics, selected, "selected"));
+                IntPtr live = Part(clone, "rowbacking-default");
+                ModLog.Load("AUTO row: a part that draws " + Wire(live));
+                ModLog.Load("AUTO row: its layout " + Describe(statics, live, "backing"));
+                ModLog.Load("AUTO row: everything " + Subtree(RowSelf()));
+            }
+            catch (Exception e)
+            {
+                ModLog.WarnRelease("AUTO row: the dump failed: " + ModLog.Describe(e));
+            }
+        }
+
+        private static string Describe(IntPtr statics, IntPtr c2d, string label)
+        {
+            if (!Memory.LooksLikeObject(c2d)) return label + "=<none>";
+            int id = Memory.U16(c2d + _c2dId);
+            bool main;
+            int slot = Slot(statics, c2d, out main);
+            string calc = "no slot";
+            if (slot >= 0)
+            {
+                IntPtr at = Calc(statics, main, slot);
+                calc = $"calc[pos {Memory.F32(at + 8):F3},{Memory.F32(at + 12):F3} " +
+                       $"a {Memory.F32(at + 0x10):F3} z {Memory.F32(at + 0x20):F3} " +
+                       $"mask {Memory.I32(at + 0x34)} d {Memory.I32(at + 0x38)}]";
+            }
+
+            return $"{label} '{Name(c2d)}' type={Memory.U8(c2d + _c2dType)} " +
+                   $"active={Active(c2d)} id={id} slot={slot} " +
+                   $"offset={Memory.F32(c2d + _c2dOffsetX):F3},{Memory.F32(c2d + _c2dOffsetY):F3} {calc}";
+        }
+
+        private static string Parts(IntPtr statics, GameObject row)
+        {
+            var text = new System.Text.StringBuilder("[");
+            int shown = 0;
+
+            foreach (IntPtr c2d in C2Ds(row))
+            {
+                if (Memory.U16(c2d + _c2dId) == 0xFFFF) continue;
+                bool main;
+                int slot = Slot(statics, c2d, out main);
+                if (slot < 0) continue;
+                IntPtr at = Calc(statics, main, slot);
+                text.Append($"{Name(c2d)} {Memory.F32(at):F0}x{Memory.F32(at + 4):F0}" +
+                            $"@{Memory.F32(at + 8):F2},{Memory.F32(at + 12):F2} " +
+                            $"{State(c2d)} {Glyphs(c2d)}; ");
+                if (++shown >= 10) break;
+            }
+
+            return text.Append(']').ToString();
+        }
+
+        private static string Glyphs(IntPtr c2d)
+        {
+            IntPtr text = Memory.Ptr(c2d + 0x170);
+            if (!Memory.LooksLikeObject(text)) return "tv-";
+            IntPtr filter = Memory.Ptr(text + 0x110);
+            if (!Memory.LooksLikeObject(filter)) return "tv0";
+
+            try
+            {
+                Mesh mesh = new MeshFilter(filter).sharedMesh;
+                return mesh == null ? "tv-" : $"tv{mesh.vertexCount}";
+            }
+            catch (Exception)
+            {
+                return "tv?";
+            }
+        }
+
+        private static string State(IntPtr c2d)
+        {
+            string enabled = "?";
+            string material = "?";
+            string vertices = "?";
+            string scale = "?";
+            string visible = "?";
+
+            try
+            {
+                IntPtr renderer = Memory.Ptr(c2d + 0x160);
+                if (Memory.LooksLikeObject(renderer) && ClassName(renderer) == "MeshRenderer")
+                {
+                    var drawn = new MeshRenderer(renderer);
+                    enabled = drawn.enabled ? "1" : "0";
+                    material = drawn.sharedMaterial == null ? "0" : "1";
+                    visible = drawn.isVisible ? "1" : "0";
+                    Transform transform = drawn.transform;
+                    if (transform != null)
+                    {
+                        Vector3 local = transform.localScale;
+                        Vector3 world = transform.position;
+                        scale = $"{local.x:F4},{local.y:F4} w{world.x:F3},{world.y:F3}";
+                    }
+                }
+            }
+            catch (Exception)
+            {
+            }
+
+            try
+            {
+                IntPtr filter = Memory.Ptr(c2d + 0x168);
+                if (Memory.LooksLikeObject(filter) && ClassName(filter) == "MeshFilter")
+                {
+                    Mesh mesh = new MeshFilter(filter).sharedMesh;
+                    vertices = mesh == null ? "0" : mesh.vertexCount.ToString();
+                }
+            }
+            catch (Exception)
+            {
+            }
+
+            return $"e{enabled}/m{material}/v{vertices}/s{scale}/vis{visible}/a{Memory.F32(c2d + 0x108):F2}";
+        }
+
+        private static IntPtr Calc(IntPtr statics, bool main, int slot) =>
+            Memory.Ptr(statics + (main ? BatchMainCalc : BatchOtherCalc)) +
+            Offsets.Runtime.ArrayDataOffset + slot * CalcSize;
+
+        private static int Slot(IntPtr statics, IntPtr c2d, out bool main)
+        {
+            main = true;
+            int index = IndexOf(Memory.Ptr(statics + BatchMain), c2d);
+            if (index >= 0) return index;
+            main = false;
+            return IndexOf(Memory.Ptr(statics + BatchOther), c2d);
+        }
+
+        private static int IndexOf(IntPtr array, IntPtr c2d)
+        {
+            int length = ArrayLength(array);
+            for (int i = 0; i < length; i++)
+                if (Memory.Ptr(array + Offsets.Runtime.ArrayDataOffset + i * IntPtr.Size) == c2d) return i;
+            return -1;
+        }
+
+        private static string Bits(IntPtr statics, int id)
+        {
+            if (id < 0 || id == 0xFFFF) return "bits-";
+            int at = Offsets.Runtime.ArrayDataOffset + id;
+            int word = Offsets.Runtime.ArrayDataOffset + id * sizeof(ushort);
+
+            return $"Q{Byte(statics, 0xB0, at)} r{Byte(statics, 0xB8, at)} " +
+                   $"R{Byte(statics, 0xC0, at)} s{Byte(statics, 0xC8, at)} " +
+                   $"S{Word(statics, 0xD0, word)} t{Word(statics, 0xD8, word)}";
+        }
+
+        private static byte Byte(IntPtr statics, int array, int at)
+        {
+            IntPtr data = Memory.Ptr(statics + array);
+            return Memory.LooksLikeObject(data) ? Memory.U8(data + at) : (byte)0;
+        }
+
+        private static ushort Word(IntPtr statics, int array, int at)
+        {
+            IntPtr data = Memory.Ptr(statics + array);
+            return Memory.LooksLikeObject(data) ? Memory.U16(data + at) : (ushort)0;
+        }
+
+        private static IntPtr Part(GameObject root, string name)
+        {
+            foreach (IntPtr c2d in C2Ds(root))
+                if (Name(c2d) == name) return c2d;
+            return IntPtr.Zero;
+        }
+
+        private static string Subtree(IntPtr c2d)
+        {
+            if (!Memory.LooksLikeObject(c2d)) return "none";
+            var text = new System.Text.StringBuilder("[");
+            IntPtr statics = WiStatics();
+
+            try
+            {
+                GameObject root = new Component(c2d).gameObject;
+                if (root != null)
+                {
+                    foreach (IntPtr part in C2Ds(root))
+                    {
+                        bool main = true;
+                        int slot = statics == IntPtr.Zero ? -1 : Slot(statics, part, out main);
+                        if (slot < 0)
+                        {
+                            text.Append($"{Name(part)}[{Id(part)} noslot] ");
+                            continue;
+                        }
+
+                        IntPtr at = Calc(statics, main, slot);
+                        text.Append($"{Name(part)}[{Id(part)} {State(part)} " +
+                                    $"{Memory.F32(at):F0}x{Memory.F32(at + 4):F0}" +
+                                    $"@{Memory.F32(at + 8):F2},{Memory.F32(at + 12):F2}" +
+                                    $" m{Memory.I32(at + 0x34)} d{Memory.I32(at + 0x38)} " +
+                                    $"{Wire(part)}] ");
+                    }
+                }
+            }
+            catch (Exception)
+            {
+            }
+
+            return text.Append(']').ToString();
+        }
+
+        private static string Wire(IntPtr c2d)
+        {
+            int id = Memory.U16(c2d + _c2dId);
+            IntPtr statics = WiStatics();
+
+            return $"mesh{(Memory.LooksLikeObject(Memory.Ptr(c2d + 0x28)) ? "+" : "-")}" +
+                   $" c0={Memory.U8(c2d + 0xC0)} c1={Memory.U8(c2d + 0xC1)} " +
+                   $"type={Memory.U8(c2d + _c2dType)} " +
+                   (statics == IntPtr.Zero ? "" : Bits(statics, id));
+        }
+
+        private static string Id(IntPtr c2d)
+        {
+            if (!Memory.LooksLikeObject(c2d)) return "none";
+            int id = Memory.U16(c2d + _c2dId);
+            string state = "?";
+
+            try
+            {
+                Component component = new Component(c2d);
+                GameObject go = component.gameObject;
+                state = $"{(go != null && go.activeSelf ? "on" : "off")}" +
+                        $"/{(BehaviourEnabled(c2d) == 1 ? "en" : BehaviourEnabled(c2d) == 0 ? "dis" : "?")}";
+            }
+            catch (Exception)
+            {
+            }
+
+            return $"{(id == 0xFFFF ? "no id" : id.ToString())} {state}";
+        }
 
         private static int BehaviourEnabled(IntPtr component)
         {
@@ -835,9 +1135,54 @@ namespace CustomSong
             }
         }
 
+        internal static string HoverState()
+        {
+            if (!Present) return "no row";
 
+            return $"selected={(On(_row + _barSelected) ? "on" : "off")} " +
+                   $"tooltip={(On(_row + _barTooltip) ? "on" : "off")}";
+        }
 
+        private static bool On(IntPtr c2d)
+        {
+            try
+            {
+                GameObject go = new Component(Memory.Ptr(c2d)).gameObject;
+                return go != null && go.activeSelf;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
 
+        internal static string Named(IntPtr component) => Name(component);
+
+        private static string Name(IntPtr c2d)
+        {
+            try
+            {
+                GameObject go = new Component(c2d).gameObject;
+                return go == null ? "<null>" : go.name;
+            }
+            catch (Exception)
+            {
+                return "<?>";
+            }
+        }
+
+        private static bool Active(IntPtr c2d)
+        {
+            try
+            {
+                GameObject go = new Component(c2d).gameObject;
+                return go != null && go.activeInHierarchy;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
 
         private static List<IntPtr> C2Ds(GameObject root)
         {

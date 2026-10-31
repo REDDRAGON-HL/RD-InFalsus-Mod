@@ -20,6 +20,7 @@ namespace CustomSong
         private static PressFn _pressedTramp;
         private static NativeHook<HoverFn> _hovered;
         private static HoverFn _hoveredTramp;
+        private static int _hovers;
         private static bool _asked;
 
         internal static void Install()
@@ -59,6 +60,9 @@ namespace CustomSong
                 _hovered.Attach();
                 _hoveredTramp = _hovered.Trampoline;
             }
+
+            ModLog.Load($"AUTO row: the option buttons are hooked " +
+                        $"(click=yes, hover={(hover != IntPtr.Zero ? "yes" : "no")})");
         }
 
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
@@ -68,7 +72,13 @@ namespace CustomSong
 
             try
             {
-                if (AutoRow.Ours(row) && entered != 0) AutoRow.Point();
+                if (AutoRow.Ours(row))
+                {
+                    if (entered != 0) AutoRow.Point();
+
+                    if (_hovers++ < 8)
+                        ModLog.Load($"AUTO row: hover {(entered != 0 ? "on " : "off")} {AutoRow.HoverState()}");
+                }
             }
             catch (Exception e)
             {

@@ -2,16 +2,11 @@ using System;
 
 namespace CustomSong
 {
-    internal sealed unsafe class NativeHook<T> where T : Delegate
+    internal static unsafe class NativeEntry
     {
-        private IntPtr _target;
-
-        private bool _attached;
-
         internal static IntPtr JumpTarget(IntPtr target)
         {
             if (target == IntPtr.Zero) return IntPtr.Zero;
-
             byte* at = (byte*)target;
             if (at[0] == 0xE9) return target + 5 + *(int*)(at + 1);
             if (at[0] == 0xEB) return target + 2 + *(sbyte*)(at + 1);
@@ -20,13 +15,21 @@ namespace CustomSong
                 return *(IntPtr*)(at + 2);
             return IntPtr.Zero;
         }
+    }
+
+    internal sealed unsafe class NativeHook<T> where T : Delegate
+    {
+        private IntPtr _target;
+        private bool _attached;
 
         private static bool AlreadyHooked(IntPtr target)
         {
-            if (JumpTarget(target) == IntPtr.Zero) return false;
-
-            ModLog.WarnRelease($"a method at 0x{target.ToInt64():X} was already hooked by another " +
-                               "mod; it is left alone instead of stacking a second detour on it");
+            if (NativeEntry.JumpTarget(target) == IntPtr.Zero) return false;
+            string name = MethodResolver.NameOf(target);
+            ModLog.WarnRelease($"a method at 0x{target.ToInt64():X}" +
+                               (name == null ? string.Empty : $" ({name})") +
+                               " was already hooked by another mod; it is left alone instead of " +
+                               "stacking a second detour on it");
             return true;
         }
 
@@ -50,7 +53,6 @@ namespace CustomSong
         public void Detach()
         {
             if (!_attached) return;
-
             _hook.Detach();
             _attached = false;
         }
@@ -89,7 +91,6 @@ namespace CustomSong
         {
             if (_target == IntPtr.Zero || Detour == IntPtr.Zero) return false;
             if (AlreadyHooked(_target)) return false;
-
             IntPtr origin;
             if (Dobby.Hook(_target, Detour, &origin) != 0) return false;
             _trampoline = System.Runtime.InteropServices.Marshal.GetDelegateForFunctionPointer<T>(origin);

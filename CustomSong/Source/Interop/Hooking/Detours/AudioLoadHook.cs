@@ -59,15 +59,13 @@ namespace CustomSong
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static void ZgADetour(IntPtr record, IntPtr unused)
         {
+            Alive(Hook.AudioRead);
             ZgaCalls++;
 
             if (!Faulted)
             {
                 try
                 {
-#if DEBUG
-                    ReadBookkeeping.Observe(record);
-#endif
                     if (AudioCatalog.TryServe(record)) { ZgaServed++; return; }
                 }
                 catch (Exception e)
@@ -82,6 +80,7 @@ namespace CustomSong
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static byte DjaDetour(IntPtr self, IntPtr name, IntPtr index)
         {
+            Alive(Hook.AudioName);
             DjaCalls++;
 
             if (!Faulted)

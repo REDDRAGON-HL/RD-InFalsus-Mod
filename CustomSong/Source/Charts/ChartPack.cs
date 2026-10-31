@@ -8,6 +8,7 @@ namespace CustomSong
         internal string Folder;
         internal string Name;
         internal string Slug;
+        internal string[] Names;
         internal readonly Dictionary<string, string> Visuals = new Dictionary<string, string>(StringComparer.Ordinal);
         internal readonly List<ChartInfo> Charts = new List<ChartInfo>();
         internal int PackId = -1;

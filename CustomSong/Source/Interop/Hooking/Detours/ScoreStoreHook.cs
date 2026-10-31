@@ -157,13 +157,11 @@ namespace CustomSong
         private static byte ReadResultDetour(IntPtr results, IntPtr songInfo, byte difficulty,
                                              IntPtr result, IntPtr methodInfo)
         {
+            Alive(Hook.ResultRead);
             ScoreStore.Reads++;
             IntPtr table = results;
             if (!Faulted)
             {
-#if DEBUG
-                long t0 = Now;
-#endif
                 try
                 {
                     if (ScoreStore.IsOurs(songInfo))
@@ -177,9 +175,6 @@ namespace CustomSong
                 {
                     Fault(Hook.ResultRead, e);
                 }
-#if DEBUG
-                TicksRead += Now - t0;
-#endif
             }
 
             return _readResultTramp(table, songInfo, difficulty, result, methodInfo);
@@ -191,13 +186,11 @@ namespace CustomSong
                                                  IntPtr miss, IntPtr lamp, IntPtr rank, IntPtr clear,
                                                  IntPtr methodInfo)
         {
+            Alive(Hook.ResultReadFull);
             ScoreStore.Reads++;
             IntPtr table = results;
             if (!Faulted)
             {
-#if DEBUG
-                long t0 = Now;
-#endif
                 try
                 {
                     if (ScoreStore.IsOurs(songInfo))
@@ -211,9 +204,6 @@ namespace CustomSong
                 {
                     Fault(Hook.ResultReadFull, e);
                 }
-#if DEBUG
-                TicksRead += Now - t0;
-#endif
             }
 
             return _readResultFullTramp(table, songInfo, difficulty, score, shiny, perfect, far, miss,
@@ -224,6 +214,7 @@ namespace CustomSong
         private static int UpdateResultDetour(IntPtr results, IntPtr songInfo, IntPtr newResult,
                                               IntPtr existingScore, IntPtr methodInfo)
         {
+            Alive(Hook.ResultUpdate);
             ScoreStore.Updates++;
             bool ours = false;
             IntPtr table = results;
@@ -301,6 +292,7 @@ namespace CustomSong
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static byte UpdateEncounterDetour(IntPtr results, IntPtr newResult, IntPtr methodInfo)
         {
+            Alive(Hook.EncounterResult);
             ScoreStore.EncounterWrites++;
 
             if (!Faulted)
@@ -309,15 +301,9 @@ namespace CustomSong
                 {
                     bool ours = false;
                     IntPtr playing = IntPtr.Zero;
-#if DEBUG
-                    string seen = "no payload";
-#endif
                     if (CurrentSong.TryReadSong(out playing))
                     {
                         ours = ScoreStore.IsOurs(playing);
-#if DEBUG
-                        seen = $"song {Memory.U16(playing + Offsets.Song.Id)}, {(ours ? "ours" : "not ours")}";
-#endif
                     }
 
                     if (Auto.AutoMark.Ran)
@@ -327,7 +313,6 @@ namespace CustomSong
                         ModLog.Load("autoplay: the encounter result is not written");
                         return 0;
                     }
-
                 }
                 catch (Exception e)
                 {

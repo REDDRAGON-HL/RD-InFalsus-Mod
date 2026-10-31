@@ -24,9 +24,6 @@ namespace CustomSong
         [Conditional("DEBUG")]
         internal static void Info(string message)
         {
-#if DEBUG
-            Sink.Msg(message);
-#endif
         }
 
         internal static void Load(string message) => Sink.Msg(message);
@@ -36,26 +33,13 @@ namespace CustomSong
         [Conditional("DEBUG")]
         internal static void Warn(string message)
         {
-#if DEBUG
-            Sink.Warning(message);
-#endif
         }
 
         internal static string Describe(System.Exception e)
         {
             if (e == null) return "<null>";
 
-#if DEBUG
-            var sb = new System.Text.StringBuilder();
-            for (System.Exception x = e; x != null; x = x.InnerException)
-            {
-                if (sb.Length > 0) sb.Append(" <- ");
-                sb.Append(x.GetType().Name).Append(": ").Append(x.Message);
-            }
-            return sb.ToString();
-#else
             return e.GetType().Name;
-#endif
         }
     }
 }

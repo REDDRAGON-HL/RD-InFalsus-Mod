@@ -10,7 +10,7 @@
     <Configurations>Debug;Release;BepInExDebug;BepInExRelease</Configurations>
 
     <!-- The assembly's version number. -->
-    <AssemblyVersion>1.1.1</AssemblyVersion>
+    <AssemblyVersion>1.1.2</AssemblyVersion>
   </PropertyGroup>
 
   <!-- Which loader this build targets, and the define it compiles with. -->
@@ -68,8 +68,14 @@
     <Compile Remove="Source\Probe\**\*.cs" Condition="'$(Configuration)' == 'Release' Or '$(Configuration)' == 'BepInExRelease'" />
   </ItemGroup>
 
-  <!-- Compile-time references; the loader supplies them at runtime. -->
+    <!-- Compile-time references; the loader supplies them at runtime. -->
   <ItemGroup>
+    <!-- Harmony, shipped with both loaders; the IL2CPP backend comes with Il2CppInterop at run time. -->
+    <Reference Include="0Harmony">
+      <HintPath>$(LoaderDir)\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
     <Reference Include="MelonLoader" Condition="'$(Loader)' == 'MelonLoader'">
       <HintPath>$(LoaderDir)\MelonLoader.dll</HintPath>
       <Private>false</Private>

@@ -182,6 +182,7 @@ namespace CustomSong
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static void LargeCardDetour(IntPtr self, IntPtr input, IntPtr model, int index)
         {
+            Alive(Hook.PackVisual);
             ApplyCardTable(self, LargeAssetsField, "large");
             _largeCardTramp(self, input, model, index);
             ReportStripCount(self, model);
@@ -190,41 +191,35 @@ namespace CustomSong
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static void SmallCardDetour(IntPtr self, IntPtr dataAccess, IntPtr model, int index)
         {
+            Alive(Hook.PackVisual);
             ApplyCardTable(self, SmallAssetsField, "list card");
             ReportCardArt(self, model, index);
             _smallCardTramp(self, dataAccess, model, index);
         }
 
+        private static bool _saidCards;
+
         private static void ReportCardArt(IntPtr card, IntPtr model, int index)
         {
-            if (Faulted || !ResolveFields() || !Memory.LooksLikeObject(model)) return;
-            if (_reportedCards++ >= ReportLimit) return;
-            int packId = PackId(model);
-            IntPtr assets = Memory.Ptr(card + SmallAssetsField);
-            IntPtr art = PackText.RowMaterial(assets, packId, "PackSelectNonCompleted");
-
+            if (_saidCards) return;
+            _saidCards = true;
+            ModLog.Load($"song select: the pack list is being built (first card index {index})");
         }
+
+        private static bool _saidOutline;
 
         private static void ReportOutlineArt(IntPtr card, IntPtr model)
         {
-            if (Faulted || !ResolveFields() || !Memory.LooksLikeObject(model)) return;
-            int packId = PackId(model);
-            if (!SongCatalog.IsCustomPack(packId) || !_outlineReported.Add(packId)) return;
-            IntPtr assets = Memory.Ptr(card + OutlineAssetsField);
-            IntPtr row = PackText.RowMaterial(assets, packId, "OutlineNonCompleted");
-            IntPtr visual = OutlineVisualField < 0 ? IntPtr.Zero : Memory.Ptr(card + OutlineVisualField);
-            IntPtr applied = Memory.LooksLikeObject(visual) ? Memory.Ptr(visual + 0x40) : IntPtr.Zero;
-
+            if (_saidOutline) return;
+            _saidOutline = true;
+            ModLog.Load("song select: the progress list is being built");
         }
-
-        private static readonly HashSet<int> _outlineReported = new HashSet<int>();
-        private const int ReportLimit = 40;
-        private static int _reportedCards;
 
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static void OutlineDetour(IntPtr self, IntPtr dataAccess, IntPtr input, IntPtr model,
                                           int index)
         {
+            Alive(Hook.PackVisual);
             ApplyCardTable(self, OutlineAssetsField, "outline");
             _outlineTramp(self, dataAccess, input, model, index);
             ReportOutlineArt(self, model);
@@ -233,6 +228,7 @@ namespace CustomSong
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static void DlcCardDetour(IntPtr self, IntPtr dataAccess, IntPtr model, int index)
         {
+            Alive(Hook.PackVisual);
             ApplyCardTable(self, DlcAssetsField, "DLC card");
             _dlcCardTramp(self, dataAccess, model, index);
         }
@@ -247,6 +243,7 @@ namespace CustomSong
                 if (!Memory.LooksLikeObject(assets)) return;
 
                 if (_cardTables.Add(assets))
+                    ModLog.Load($"pack visuals: the {which} card reads a table at 0x{assets.ToInt64():X}");
                 CustomSongCore.ApplyVisualsTo(assets);
             }
             catch (Exception e)
@@ -285,6 +282,7 @@ namespace CustomSong
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static void PackButtonDetour(IntPtr self, IntPtr modelRef, IntPtr methodInfo)
         {
+            Alive(Hook.PackVisual);
             bool raised = false;
 
             if (!Faulted && modelRef != IntPtr.Zero)
@@ -378,13 +376,11 @@ namespace CustomSong
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static void PackDifficultyDetour(IntPtr self, byte difficulty, IntPtr methodInfo)
         {
+            Alive(Hook.PackVisual);
             PackDifficultyCalls++;
             bool rebuild = false;
             if (!Faulted)
             {
-#if DEBUG
-                long t0 = Now;
-#endif
                 try
                 {
                     CurrentSong.ApplyingDifficulty(difficulty);
@@ -394,22 +390,13 @@ namespace CustomSong
                 {
                     Fault(Hook.PackVisual, e);
                 }
-#if DEBUG
-                TicksVc += Now - t0;
-#endif
             }
 
             _packDifficultyTramp(self, difficulty, methodInfo);
 
             if (rebuild)
             {
-#if DEBUG
-                long t1 = Now;
-#endif
                 RebuildCards(self);
-#if DEBUG
-                TicksVc += Now - t1;
-#endif
             }
         }
 

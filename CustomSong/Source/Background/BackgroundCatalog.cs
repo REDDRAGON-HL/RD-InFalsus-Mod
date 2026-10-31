@@ -39,11 +39,7 @@ namespace CustomSong
                 if (material == IntPtr.Zero)
                 {
                     all = false;
-#if DEBUG
-                    if (reason == null) reason = $"difficulty {d}: {why}";
-#else
                     _ = why;
-#endif
                     continue;
                 }
 
@@ -73,9 +69,6 @@ namespace CustomSong
                     if (i == 0) entry = entries[0];
                     else if (entries[i].Material != entry.Material || entries[i].Video != entry.Video)
                     {
-#if DEBUG
-                        why = "a background is set per difficulty and the selected one could not be read";
-#endif
                         return false;
                     }
                 }

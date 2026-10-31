@@ -29,10 +29,6 @@ namespace CustomSong
             _resolved = _textureClass != IntPtr.Zero && _materialClass != IntPtr.Zero &&
                         _shaderClass != IntPtr.Zero && _color32Class != IntPtr.Zero;
 
-#if DEBUG
-            ArtworkProbe.Report();
-#endif
-
             return _resolved;
         }
 
@@ -84,9 +80,6 @@ namespace CustomSong
 
             if (!Resolve())
             {
-#if DEBUG
-                reason = "the game's texture and material types could not be found";
-#endif
                 return IntPtr.Zero;
             }
 
@@ -97,11 +90,7 @@ namespace CustomSong
             }
             catch (Exception e)
             {
-#if DEBUG
-                reason = $"{Path.GetFileName(pngPath)} could not be read: {ModLog.Describe(e)}";
-#else
                 _ = e;
-#endif
                 return IntPtr.Zero;
             }
 
@@ -159,6 +148,8 @@ namespace CustomSong
             MakeTransparent(material, sourceMaterial);
 
             Keep(texture, material);
+            ModLog.Load($"pack cover '{Path.GetFileName(path)}': {image.Width}x{image.Height} " +
+                        $"clear={TransparentShare(image.Rgba):P0}");
             return material;
         }
 
@@ -169,51 +160,6 @@ namespace CustomSong
                 if (rgba[i] < 128) clear++;
             return rgba.Length == 0 ? 0 : (double)clear / (rgba.Length / Color32Size);
         }
-
-#if DEBUG
-
-        internal static string UnityName(IntPtr obj)
-        {
-            if (!Memory.LooksLikeObject(obj)) return "<none>";
-            IntPtr klass = Il2CppInterop.Runtime.IL2CPP.il2cpp_object_get_class(obj);
-            IntPtr getter = klass == IntPtr.Zero ? IntPtr.Zero : Entry(klass, "get_name", 0);
-            if (getter == IntPtr.Zero) return "<no name getter>";
-            IntPtr raised = IntPtr.Zero;
-            IntPtr text = Il2CppInterop.Runtime.IL2CPP.il2cpp_runtime_invoke(getter, obj, null, ref raised);
-            if (raised != IntPtr.Zero || text == IntPtr.Zero) return "<unnamed>";
-            return Memory.Text(text);
-        }
-
-        internal static string TextureProperties(IntPtr material)
-        {
-            IntPtr list = Entry(_materialClass, "GetTexturePropertyNames", 0);
-            if (list == IntPtr.Zero) return "<no property list>";
-            IntPtr raised = IntPtr.Zero;
-            IntPtr names = Il2CppInterop.Runtime.IL2CPP.il2cpp_runtime_invoke(list, material, null, ref raised);
-            if (raised != IntPtr.Zero || !Memory.LooksLikeObject(names)) return "<none>";
-            IntPtr getTexture = Entry(_materialClass, "GetTexture", 1);
-            if (getTexture == IntPtr.Zero) return "<no GetTexture>";
-            int count = Memory.I32(names + Offsets.Runtime.ArrayLength);
-            var text = new System.Text.StringBuilder();
-            IntPtr* args = stackalloc IntPtr[1];
-
-            for (int i = 0; i < count; i++)
-            {
-                IntPtr name = Memory.Ptr(names + Offsets.Runtime.ArrayDataOffset + i * IntPtr.Size);
-                if (!Memory.LooksLikeObject(name)) continue;
-                args[0] = name;
-                IntPtr error = IntPtr.Zero;
-                IntPtr texture = Il2CppInterop.Runtime.IL2CPP.il2cpp_runtime_invoke(
-                    getTexture, material, (void**)args, ref error);
-                if (text.Length > 0) text.Append(", ");
-                text.Append(Memory.Text(name)).Append('=');
-                text.Append(error != IntPtr.Zero || texture == IntPtr.Zero
-                    ? "<null>" : UnityName(texture));
-            }
-
-            return text.ToString();
-        }
-#endif
 
         private static readonly List<IntPtr> Kept = new List<IntPtr>();
 
@@ -228,9 +174,6 @@ namespace CustomSong
             reason = null;
             if (!Resolve())
             {
-#if DEBUG
-                reason = "the game's texture and material types could not be found";
-#endif
                 return IntPtr.Zero;
             }
 
@@ -245,9 +188,6 @@ namespace CustomSong
             IntPtr colors = Il2CppInterop.Runtime.IL2CPP.il2cpp_array_new(_color32Class, (ulong)pixels);
             if (colors == IntPtr.Zero)
             {
-#if DEBUG
-                reason = "the jacket's pixel array could not be allocated";
-#endif
                 return IntPtr.Zero;
             }
 
@@ -267,27 +207,18 @@ namespace CustomSong
             IntPtr texture = Il2CppInterop.Runtime.IL2CPP.il2cpp_object_new(_textureClass);
             if (texture == IntPtr.Zero)
             {
-#if DEBUG
-                reason = "the jacket's texture could not be created";
-#endif
                 return IntPtr.Zero;
             }
 
             IntPtr constructor = ConstructorBySignature("Texture2D", ConstructorWanted);
             if (constructor == IntPtr.Zero)
             {
-#if DEBUG
-                reason = "Texture2D's constructor could not be found";
-#endif
                 return IntPtr.Zero;
             }
 
             int format = SupportedFormat();
             if (format == 0)
             {
-#if DEBUG
-                reason = "the device supports none of the texture formats a jacket can use";
-#endif
                 return IntPtr.Zero;
             }
 
@@ -306,19 +237,12 @@ namespace CustomSong
 
             if (IsKnownToHaveNoNativeObject(texture))
             {
-#if DEBUG
-                reason = "Texture2D's constructor returned but the texture has no native object";
-#endif
                 return IntPtr.Zero;
             }
 
             int built = WidthOf(texture);
             if (built != image.Width)
             {
-#if DEBUG
-                reason = $"Texture2D's constructor returned but the texture reports {built} pixels " +
-                         $"wide instead of {image.Width}";
-#endif
                 return IntPtr.Zero;
             }
 
@@ -326,9 +250,6 @@ namespace CustomSong
             IntPtr setPixels = Entry(_textureClass, "SetPixels32", 1);
             if (setPixels == IntPtr.Zero)
             {
-#if DEBUG
-                reason = "Texture2D.SetPixels32 could not be found";
-#endif
                 return IntPtr.Zero;
             }
 
@@ -338,9 +259,6 @@ namespace CustomSong
             IntPtr apply = Entry(_textureClass, "Apply", 0);
             if (apply == IntPtr.Zero)
             {
-#if DEBUG
-                reason = "Texture2D.Apply could not be found";
-#endif
                 return IntPtr.Zero;
             }
 
@@ -390,18 +308,12 @@ namespace CustomSong
             IntPtr material = Il2CppInterop.Runtime.IL2CPP.il2cpp_object_new(_materialClass);
             if (material == IntPtr.Zero)
             {
-#if DEBUG
-                reason = "the jacket's material could not be created";
-#endif
                 return IntPtr.Zero;
             }
 
             IntPtr constructor = Entry(_materialClass, ".ctor", 1);
             if (constructor == IntPtr.Zero)
             {
-#if DEBUG
-                reason = "Material's constructor could not be found";
-#endif
                 return IntPtr.Zero;
             }
 
@@ -411,18 +323,12 @@ namespace CustomSong
 
             if (IsKnownToHaveNoNativeObject(material))
             {
-#if DEBUG
-                reason = "Material's constructor returned but the material has no native object";
-#endif
                 return IntPtr.Zero;
             }
 
             IntPtr setTexture = Entry(_materialClass, "set_mainTexture", 1);
             if (setTexture == IntPtr.Zero)
             {
-#if DEBUG
-                reason = "Material.set_mainTexture could not be found";
-#endif
                 return IntPtr.Zero;
             }
 
@@ -707,18 +613,7 @@ namespace CustomSong
 
         internal static string Words(IntPtr address, int count)
         {
-#if DEBUG
-            var text = new System.Text.StringBuilder();
-            for (int i = 0; i < count; i++)
-            {
-                IntPtr at = address + i * IntPtr.Size;
-                if (i > 0) text.Append(' ');
-                text.Append(Memory.Ptr(at).ToInt64().ToString("X"));
-            }
-            return text.ToString();
-#else
             return null;
-#endif
         }
 
         private static string DeclaringTypeName(IntPtr method)
@@ -801,9 +696,6 @@ namespace CustomSong
             for (int i = 0; i < count; i++)
             {
                 if (args[i] != IntPtr.Zero) continue;
-#if DEBUG
-                reason = $"argument {i} could not be built, so the call was not made";
-#endif
                 return false;
             }
 
@@ -811,9 +703,6 @@ namespace CustomSong
             Il2CppInterop.Runtime.IL2CPP.il2cpp_runtime_invoke(method, instance, (void**)args, ref raised);
             if (raised == IntPtr.Zero) return true;
 
-#if DEBUG
-            reason = $"a call into the game's rendering types raised: {Raised.Text(raised)}";
-#endif
             return false;
         }
 
@@ -833,5 +722,6 @@ namespace CustomSong
         }
 
         private const int MethodsWalkLimit = 4096;
+        private const int MethodsToLog = 30;
     }
 }

@@ -161,14 +161,12 @@ namespace CustomSong
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static IntPtr ApADetour(IntPtr songData, IntPtr songInfo, byte large, IntPtr methodInfo)
         {
+            Alive(Hook.JacketReference);
             IntPtr fallback = _apaTramp(songData, songInfo, large, methodInfo);
             ApACalls++;
 
             if (!Faulted)
             {
-#if DEBUG
-                long t0 = Now;
-#endif
                 try
                 {
                     if (JacketCatalog.Find(songInfo, out IntPtr material))
@@ -183,9 +181,6 @@ namespace CustomSong
                     JacketCatalog.Disarm();
                     Fault(Hook.JacketReference, e);
                 }
-#if DEBUG
-                TicksApa += Now - t0;
-#endif
             }
 
             return fallback;
@@ -195,21 +190,16 @@ namespace CustomSong
         private static IntPtr MiaDetour(IntPtr owner, IntPtr releaser, IntPtr reference, byte forceReload,
                                         IntPtr methodInfo)
         {
+            Alive(Hook.JacketMaterial);
             MiaCalls++;
 
             if (!Faulted)
             {
-#if DEBUG
-                long t0 = Now;
-#endif
                 try
                 {
                     if (JacketCatalog.TryClaim(reference, out IntPtr material, out bool _))
                     {
                         MiaClaimed++;
-#if DEBUG
-                        TicksMia += Now - t0;
-#endif
                         return material;
                     }
                 }
@@ -217,9 +207,6 @@ namespace CustomSong
                 {
                     Fault(Hook.JacketMaterial, e);
                 }
-#if DEBUG
-                TicksMia += Now - t0;
-#endif
             }
 
             return _miaTramp(owner, releaser, reference, forceReload, methodInfo);
@@ -228,6 +215,7 @@ namespace CustomSong
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static IntPtr ZoaDetour(IntPtr songData, IntPtr chartInfo, byte large, IntPtr methodInfo)
         {
+            Alive(Hook.ChartReference);
             IntPtr fallback = _zoaTramp(songData, chartInfo, large, methodInfo);
             ZoaCalls++;
 
@@ -255,6 +243,7 @@ namespace CustomSong
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static IntPtr LiaDetour(IntPtr owner, IntPtr reference, IntPtr methodInfo)
         {
+            Alive(Hook.ChartMaterial);
             LiaCalls++;
 
             if (!Faulted)
@@ -302,6 +291,7 @@ namespace CustomSong
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static IntPtr UmaDetour(IntPtr backgrounds, int background, IntPtr methodInfo)
         {
+            Alive(Hook.Background);
             IntPtr fallback = _umaTramp(backgrounds, background, methodInfo);
             UmaCalls++;
 

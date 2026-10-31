@@ -33,9 +33,6 @@ namespace CustomSong
             string ifPath = Path.Combine(folder, InfoFileName);
             if (!File.Exists(ifPath))
             {
-#if DEBUG
-                reason = $"no {InfoFileName} file";
-#endif
                 return false;
             }
 
@@ -46,11 +43,7 @@ namespace CustomSong
             }
             catch (Exception e)
             {
-#if DEBUG
-                reason = $"{InfoFileName} could not be read: {ModLog.Describe(e)}";
-#else
                 _ = e;
-#endif
                 return false;
             }
 
@@ -61,11 +54,7 @@ namespace CustomSong
             }
             catch (Exception e)
             {
-#if DEBUG
-                reason = $"{InfoFileName} is not valid JSON: {ModLog.Describe(e)}";
-#else
                 _ = e;
-#endif
                 return false;
             }
 
@@ -73,9 +62,6 @@ namespace CustomSong
             JsonElement root = owned.RootElement;
             if (root.ValueKind != JsonValueKind.Object)
             {
-#if DEBUG
-                reason = $"{InfoFileName} is not a JSON object";
-#endif
                 return false;
             }
 
@@ -83,8 +69,18 @@ namespace CustomSong
             var built = new ChartInfo { Folder = folder, FolderName = folderName };
             if (!Text(root, "id", out string id, out reason)) return false;
             built.BaseName = id;
-            if (!Names(root, out built.Names, out reason)) return false;
-            built.Name = built.Names[0];
+
+            if (LanguageNames(root, out built.Titles))
+            {
+                built.Name = built.Titles[0];
+            }
+            else
+            {
+                if (!Names(root, out built.Names, out reason)) return false;
+                built.Name = built.Names[0];
+                built.Titles = SameFive(built.Name);
+            }
+
             if (!Composers(root, out built.Composers, out reason)) return false;
             built.Composer = built.Composers[0];
             if (!Illustrators(root, out built.Illustrators, out reason)) return false;
@@ -110,6 +106,28 @@ namespace CustomSong
             return true;
         }
 
+        private static bool LanguageNames(JsonElement root, out string[] titles)
+        {
+            titles = null;
+            if (!root.TryGetProperty("name", out JsonElement token)) return false;
+            if (token.ValueKind != JsonValueKind.Array) return false;
+            if (token.GetArrayLength() != 5) return false;
+            var values = new string[5];
+            for (int i = 0; i < values.Length; i++)
+            {
+                JsonElement entry = token[i];
+                if (entry.ValueKind != JsonValueKind.String) return false;
+                string text = entry.GetString();
+                if (string.IsNullOrWhiteSpace(text)) return false;
+                values[i] = text;
+            }
+
+            titles = values;
+            return true;
+        }
+
+        private static string[] SameFive(string text) => new[] { text, text, text, text, text };
+
         internal static string WhyNot(string folder)
         {
             string ifPath = Path.Combine(folder, InfoFileName);
@@ -134,9 +152,6 @@ namespace CustomSong
 
             if (!root.TryGetProperty("composer", out JsonElement token) || token.ValueKind == JsonValueKind.Null)
             {
-#if DEBUG
-                reason = "\"composer\" is missing";
-#endif
                 return false;
             }
 
@@ -145,9 +160,6 @@ namespace CustomSong
                 string one = token.GetString();
                 if (string.IsNullOrWhiteSpace(one))
                 {
-#if DEBUG
-                    reason = "\"composer\" is empty";
-#endif
                     return false;
                 }
 
@@ -165,26 +177,17 @@ namespace CustomSong
 
             if (!root.TryGetProperty(key, out JsonElement token) || token.ValueKind == JsonValueKind.Null)
             {
-#if DEBUG
-                reason = $"\"{key}\" is missing";
-#endif
                 return false;
             }
 
             if (token.ValueKind != JsonValueKind.String)
             {
-#if DEBUG
-                reason = $"\"{key}\" is not a string";
-#endif
                 return false;
             }
 
             value = token.GetString();
             if (string.IsNullOrWhiteSpace(value))
             {
-#if DEBUG
-                reason = $"\"{key}\" is empty";
-#endif
                 return false;
             }
 
@@ -207,28 +210,18 @@ namespace CustomSong
 
             if (Path.GetFileName(name) != name)
             {
-#if DEBUG
-                reason = $"\"{key}\" names something outside the folder: {name}";
-#endif
                 return false;
             }
 
             string extension = Path.GetExtension(name).ToLowerInvariant();
             if (Array.IndexOf(allowed, extension) < 0)
             {
-#if DEBUG
-                reason = $"\"{key}\" is {extension}, which the game cannot decode " +
-                         $"(accepted: {string.Join(", ", allowed)})";
-#endif
                 return false;
             }
 
             path = Path.Combine(folder, name);
             if (!File.Exists(path))
             {
-#if DEBUG
-                reason = $"\"{key}\" points at {name}, which is not in the folder";
-#endif
                 path = null;
                 return false;
             }
@@ -257,9 +250,6 @@ namespace CustomSong
 
             if (!root.TryGetProperty(key, out JsonElement token) || token.ValueKind == JsonValueKind.Null)
             {
-#if DEBUG
-                reason = $"\"{key}\" is missing";
-#endif
                 return false;
             }
 
@@ -274,18 +264,12 @@ namespace CustomSong
 
             if (token.ValueKind != JsonValueKind.Array)
             {
-#if DEBUG
-                reason = $"\"{key}\" is neither a name nor a list of names";
-#endif
                 return false;
             }
 
             int count = token.GetArrayLength();
             if (count != ChartInfo.Difficulties)
             {
-#if DEBUG
-                reason = $"\"{key}\" has {count} entries, not {ChartInfo.Difficulties}";
-#endif
                 return false;
             }
 
@@ -297,9 +281,6 @@ namespace CustomSong
 
                 if (item.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(item.GetString()))
                 {
-#if DEBUG
-                    reason = $"\"{key}\"[{i}] is not a name";
-#endif
                     return false;
                 }
 
@@ -324,9 +305,6 @@ namespace CustomSong
                 string single = token.GetString();
                 if (string.IsNullOrWhiteSpace(single))
                 {
-#if DEBUG
-                    reason = "\"illust\" is empty";
-#endif
                     return false;
                 }
 
@@ -337,18 +315,12 @@ namespace CustomSong
 
             if (token.ValueKind != JsonValueKind.Array)
             {
-#if DEBUG
-                reason = "\"illust\" is neither a name nor a list of names";
-#endif
                 return false;
             }
 
             int count = token.GetArrayLength();
             if (count != ChartInfo.Difficulties)
             {
-#if DEBUG
-                reason = $"\"illust\" has {count} entries, not {ChartInfo.Difficulties}";
-#endif
                 return false;
             }
 
@@ -364,9 +336,6 @@ namespace CustomSong
 
                 if (item.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(item.GetString()))
                 {
-#if DEBUG
-                    reason = $"\"illust\"[{i}] is not a name";
-#endif
                     return false;
                 }
                 result[i] = item.GetString();
@@ -385,26 +354,17 @@ namespace CustomSong
             if (!root.TryGetProperty("preview_seconds", out JsonElement token) ||
                 token.ValueKind == JsonValueKind.Null)
             {
-#if DEBUG
-                reason = "\"preview_seconds\" is missing";
-#endif
                 return false;
             }
 
             if (token.ValueKind != JsonValueKind.Array)
             {
-#if DEBUG
-                reason = "\"preview_seconds\" is not a list";
-#endif
                 return false;
             }
 
             int count = token.GetArrayLength();
             if (count != 2)
             {
-#if DEBUG
-                reason = $"\"preview_seconds\" has {count} entries, not 2";
-#endif
                 return false;
             }
 
@@ -428,9 +388,6 @@ namespace CustomSong
                 float.TryParse(item.GetString(), NumberStyles.Float,
                                CultureInfo.InvariantCulture, out value)) return true;
 
-#if DEBUG
-            reason = $"\"preview_seconds\"[{index}] is not a number of seconds";
-#endif
             return false;
         }
 
@@ -441,18 +398,11 @@ namespace CustomSong
 
             if (!root.TryGetProperty(key, out JsonElement found))
             {
-#if DEBUG
-                reason = $"\"{key}\" is missing";
-#endif
                 return false;
             }
 
             if (found.ValueKind == JsonValueKind.Array && found.GetArrayLength() != ChartInfo.Difficulties)
             {
-#if DEBUG
-                reason = $"\"{key}\" has {found.GetArrayLength()} entries, not {ChartInfo.Difficulties} "
-                       + "and not one";
-#endif
                 return false;
             }
 
@@ -485,10 +435,6 @@ namespace CustomSong
 
                 if (charters[d].ValueKind == JsonValueKind.Null || levels[d].ValueKind == JsonValueKind.Null)
                 {
-#if DEBUG
-                    reason = $"difficulty {d} has a chart but no "
-                           + (charters[d].ValueKind == JsonValueKind.Null ? "\"charter\"" : "\"lv\"");
-#endif
                     return false;
                 }
             }
@@ -508,9 +454,6 @@ namespace CustomSong
 
                 if (item.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(item.GetString()))
                 {
-#if DEBUG
-                    reason = $"\"{key}\"[{i}] is not a name";
-#endif
                     return false;
                 }
                 result[i] = item.GetString();
@@ -532,17 +475,11 @@ namespace CustomSong
 
                 if (!Whole(item, out int level))
                 {
-#if DEBUG
-                    reason = $"\"{key}\"[{i}] is not a whole number";
-#endif
                     return false;
                 }
 
                 if (level <= 0)
                 {
-#if DEBUG
-                    reason = $"\"{key}\"[{i}] is {level}";
-#endif
                     return false;
                 }
                 result[i] = level;
@@ -582,27 +519,18 @@ namespace CustomSong
                 }
                 if (item.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(item.GetString()))
                 {
-#if DEBUG
-                    reason = $"\"chart\"[{i}] is not a name";
-#endif
                     return false;
                 }
 
                 string name = item.GetString();
                 if (Path.GetFileName(name) != name)
                 {
-#if DEBUG
-                    reason = $"\"chart\"[{i}] names something outside the folder: {name}";
-#endif
                     return false;
                 }
 
                 string path = Path.Combine(folder, name);
                 if (!File.Exists(path))
                 {
-#if DEBUG
-                    reason = $"\"chart\"[{i}] points at {name}, which is not in the folder";
-#endif
                     return false;
                 }
 

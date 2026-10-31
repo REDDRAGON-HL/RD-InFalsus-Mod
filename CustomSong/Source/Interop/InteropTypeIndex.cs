@@ -15,6 +15,8 @@ namespace CustomSong
         {
             if (_byName != null) return _byName;
             var index = new Dictionary<string, List<Type>>(StringComparer.Ordinal);
+            int scanned = 0;
+            long mark = Timing.Now;
 
             foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
             {
@@ -40,6 +42,7 @@ namespace CustomSong
 
                     try
                     {
+                        scanned++;
                         Add(index, t.Name, t);
                         if (t.DeclaringType != null) Add(index, t.DeclaringType.Name + "." + t.Name, t);
                     }
@@ -49,6 +52,7 @@ namespace CustomSong
                 }
             }
 
+            ModLog.Load($"timing: indexed {scanned} interop types in {Timing.Ms(mark):F0} ms");
             return _byName = index;
         }
 

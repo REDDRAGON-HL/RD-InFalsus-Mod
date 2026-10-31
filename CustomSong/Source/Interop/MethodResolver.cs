@@ -8,12 +8,25 @@ namespace CustomSong
     {
         private const BindingFlags AnyMethod =
             BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance;
+        private static readonly Dictionary<IntPtr, string> _names = new();
+
+        private static void Remember(IntPtr address, string name)
+        {
+            if (address == IntPtr.Zero) return;
+            lock (_names) _names[address] = name;
+        }
+
+        internal static string NameOf(IntPtr address)
+        {
+            lock (_names) return _names.TryGetValue(address, out string name) ? name : null;
+        }
 
         internal static IntPtr ByName(string typeName, string methodName)
         {
             IntPtr p = ViaMethodInfo(typeName, methodName);
             if (p != IntPtr.Zero)
             {
+                Remember(p, $"{typeName}.{methodName}");
                 return p;
             }
 
@@ -57,6 +70,53 @@ namespace CustomSong
             return *(IntPtr*)info;
         }
 
+        internal static MethodInfo ManagedMethod(string typeName, string methodName, string namespaceHint)
+        {
+            if (!InteropTypeIndex.ByName().TryGetValue(typeName, out List<Type> types)) return null;
+
+            foreach (Type type in Ordered(types, namespaceHint))
+            {
+                MethodInfo found = null;
+
+                try
+                {
+                    foreach (MethodInfo method in type.GetMethods(AnyMethod | BindingFlags.DeclaredOnly))
+                    {
+                        if (method.Name != methodName) continue;
+                        if (Il2CppInterop.Common.Il2CppInteropUtils
+                                .GetIl2CppMethodInfoPointerFieldForGeneratedMethod(method) == null) continue;
+                        found = method;
+                        break;
+                    }
+                }
+                catch (Exception)
+                {
+                }
+
+                if (found == null) continue;
+                return found;
+            }
+
+            return null;
+        }
+
+        private static IEnumerable<Type> Ordered(List<Type> types, string namespaceHint)
+        {
+            string prefix = namespaceHint == null ? null : namespaceHint + ".";
+
+            if (prefix != null)
+                foreach (Type type in types)
+                    if (type.FullName != null && type.FullName.StartsWith(prefix, StringComparison.Ordinal))
+                        yield return type;
+
+            foreach (Type type in types)
+            {
+                if (prefix != null && type.FullName != null &&
+                    type.FullName.StartsWith(prefix, StringComparison.Ordinal)) continue;
+                yield return type;
+            }
+        }
+
         internal static IntPtr ByRuntime(string typeName, string methodName, string image, string namespaze)
         {
             IntPtr klass = ClassOf(typeName, image, namespaze);
@@ -91,10 +151,12 @@ namespace CustomSong
                         IntPtr inflated = Inflated(klass, matched, typeName, methodName);
                         if (inflated != IntPtr.Zero && inflated != found)
                         {
+                            Remember(inflated, $"{typeName}.{methodName}");
                             return inflated;
                         }
                     }
 
+                    Remember(found, $"{typeName}.{methodName}");
                     return found;
                 }
 

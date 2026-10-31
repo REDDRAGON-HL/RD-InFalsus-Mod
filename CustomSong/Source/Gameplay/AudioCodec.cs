@@ -21,7 +21,15 @@ namespace CustomSong
             byte[] bytes;
             try
             {
-                bytes = File.ReadAllBytes(path);
+                if (Mp3Decoder.IsMp3(path))
+                {
+                    bytes = Mp3Decoder.Decode(path, out reason);
+                    if (bytes == null) return null;
+                }
+                else
+                {
+                    bytes = File.ReadAllBytes(path);
+                }
             }
             catch (Exception e)
             {
@@ -85,6 +93,9 @@ namespace CustomSong
         internal static int Measure(string path, out string reason)
         {
             reason = null;
+
+            if (Mp3Decoder.IsMp3(path))
+                return Mp3Decoder.Measure(path, out reason);
 
             try
             {

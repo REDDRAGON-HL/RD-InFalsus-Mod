@@ -1,6 +1,8 @@
 using System;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Il2CppInterop.Runtime.InteropTypes;
 
 namespace CustomSong
 {
@@ -45,6 +47,7 @@ namespace CustomSong
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static byte PlayGateDetour(IntPtr self, IntPtr methodInfo)
         {
+            Alive(Hook.PlayGate);
             byte answer = _gateTramp(self, methodInfo);
             PlayGateCalls++;
             if (answer != 0) PlayGateYes++;
@@ -118,11 +121,10 @@ namespace CustomSong
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static byte MoveNextDetour(IntPtr self, IntPtr methodInfo)
         {
+            Alive(Hook.SceneSwitch);
             byte more = _moveNextTramp(self, methodInfo);
             SceneSwitchCalls++;
-
             if (more == 0) CustomSongCore.RescanSoon();
-
             if (!Memory.LooksLikeObject(self)) return more;
             int state = Memory.I32(self + StateField);
             if (state != SceneSwitchLastState)
@@ -148,45 +150,31 @@ namespace CustomSong
         private const int CurrentField = Offsets.Runtime.Coroutine.Current;
         private const int StateField = Offsets.Runtime.Coroutine.State;
 
-        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        private delegate void SelectAwakeFn(IntPtr self);
-        private static NativeHook<SelectAwakeFn> _selectAwake;
-        private static SelectAwakeFn _selectAwakeTramp;
-
         internal static bool InstallSelectAwake()
         {
-            IntPtr awake = MethodResolver.ByName("SongSelectScene", "Awake");
-            if (awake == IntPtr.Zero)
-                awake = MethodResolver.ByRuntime("SongSelectScene", "Awake", "Game.dll",
-                                                 "ifapp.Game.Scenes");
-
-            if (awake == IntPtr.Zero)
+            MethodInfo awake = HarmonyHooks.Target("SongSelectScene", "Awake", "ifapp.Game.Scenes");
+            if (awake == null)
             {
                 ModLog.Warn("SongSelectScene.Awake could not be resolved; a new song needs a restart");
                 return false;
             }
 
-            _selectAwake = new NativeHook<SelectAwakeFn>
+            bool patched = HarmonyHooks.Patch(awake, null,
+                HarmonyHooks.Handler(typeof(Hooks), nameof(AfterSelectAwake)));
+            if (patched) ModLog.Load("hot reload: the song-select page is watched");
+            return patched;
+        }
+
+        private static void AfterSelectAwake(Il2CppObjectBase __instance)
+        {
+            Alive(Hook.SelectAwake);
+
+            if (!_saidAwake)
             {
-                Target = awake,
-                Detour = (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, void>)&SelectAwakeDetour,
-            };
-            _selectAwake.Attach();
-            _selectAwakeTramp = _selectAwake.Trampoline;
-            ModLog.Load("hot reload: the song-select page is watched");
-            return true;
-        }
+                _saidAwake = true;
+                ModLog.Load("song select: the page is waking");
+            }
 
-        internal static void DetachSelectAwake()
-        {
-            _selectAwake?.Detach();
-            _selectAwake = null;
-            _selectAwakeTramp = null;
-        }
-
-        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-        private static void SelectAwakeDetour(IntPtr self)
-        {
             try
             {
                 CustomSongCore.HotReloadIfChanged();
@@ -195,8 +183,8 @@ namespace CustomSong
             {
                 ModLog.Warn($"hot reload hook failed: {ModLog.Describe(e)}");
             }
-
-            _selectAwakeTramp(self);
         }
+
+        private static bool _saidAwake;
     }
 }

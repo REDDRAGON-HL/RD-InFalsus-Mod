@@ -22,18 +22,12 @@ namespace CustomSong
 
             if (bytes == null || bytes.Length < 8)
             {
-#if DEBUG
-                reason = "the file is too short to be a PNG";
-#endif
                 return null;
             }
 
             for (int i = 0; i < Signature.Length; i++)
                 if (bytes[i] != Signature[i])
                 {
-#if DEBUG
-                    reason = "the file is not a PNG";
-#endif
                     return null;
                 }
 
@@ -48,9 +42,6 @@ namespace CustomSong
                 int length = ReadInt32(bytes, at);
                 if (length < 0 || at + 12 + (long)length > bytes.Length)
                 {
-#if DEBUG
-                    reason = "a PNG chunk runs past the end of the file";
-#endif
                     return null;
                 }
 
@@ -68,30 +59,18 @@ namespace CustomSong
 
                     if (width <= 0 || height <= 0)
                     {
-#if DEBUG
-                        reason = "the PNG has no pixels";
-#endif
                         return null;
                     }
                     if (interlace != 0)
                     {
-#if DEBUG
-                        reason = "interlaced PNGs are not supported";
-#endif
                         return null;
                     }
                     if (bitDepth != 8)
                     {
-#if DEBUG
-                        reason = $"only 8-bit PNGs are supported, this one is {bitDepth}-bit";
-#endif
                         return null;
                     }
                     if (colourType != 0 && colourType != 2 && colourType != 3 && colourType != 4 && colourType != 6)
                     {
-#if DEBUG
-                        reason = $"PNG colour type {colourType} is not supported";
-#endif
                         return null;
                     }
                 }
@@ -114,16 +93,10 @@ namespace CustomSong
 
             if (!haveHeader)
             {
-#if DEBUG
-                reason = "the PNG has no header chunk";
-#endif
                 return null;
             }
             if (colourType == 3 && palette == null)
             {
-#if DEBUG
-                reason = "the PNG is paletted but has no palette";
-#endif
                 return null;
             }
 
@@ -134,11 +107,7 @@ namespace CustomSong
             }
             catch (Exception e)
             {
-#if DEBUG
-                reason = $"the PNG data could not be decompressed: {ModLog.Describe(e)}";
-#else
                 _ = e;
-#endif
                 return null;
             }
 
@@ -146,9 +115,6 @@ namespace CustomSong
             int stride = width * channels;
             if (raw.Length < (long)(stride + 1) * height)
             {
-#if DEBUG
-                reason = "the PNG data is shorter than its header says";
-#endif
                 return null;
             }
 
@@ -159,11 +125,7 @@ namespace CustomSong
             }
             catch (Exception e)
             {
-#if DEBUG
-                reason = $"the PNG rows could not be reconstructed: {ModLog.Describe(e)}";
-#else
                 _ = e;
-#endif
                 return null;
             }
 
@@ -271,9 +233,6 @@ namespace CustomSong
                         int entry = pixels[src] * 3;
                         if (entry + 2 >= palette.Length)
                         {
-#if DEBUG
-                            reason = "the PNG uses a palette entry that is not in its palette";
-#endif
                             return null;
                         }
                         rgba[dst] = palette[entry];

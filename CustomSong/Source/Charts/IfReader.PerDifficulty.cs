@@ -11,9 +11,6 @@ namespace CustomSong
 
             if (!root.TryGetProperty("name", out JsonElement token) || token.ValueKind == JsonValueKind.Null)
             {
-#if DEBUG
-                reason = "\"name\" is missing";
-#endif
                 return false;
             }
 
@@ -22,9 +19,6 @@ namespace CustomSong
                 string one = token.GetString();
                 if (string.IsNullOrWhiteSpace(one))
                 {
-#if DEBUG
-                    reason = "\"name\" is empty";
-#endif
                     return false;
                 }
 
@@ -42,9 +36,6 @@ namespace CustomSong
 
             if (!root.TryGetProperty("song", out JsonElement token) || token.ValueKind == JsonValueKind.Null)
             {
-#if DEBUG
-                reason = "\"song\" is missing";
-#endif
                 return false;
             }
 
@@ -58,9 +49,6 @@ namespace CustomSong
 
             if (token.ValueKind != JsonValueKind.Array)
             {
-#if DEBUG
-                reason = "\"song\" is neither a string nor a list";
-#endif
                 return false;
             }
 
@@ -86,10 +74,6 @@ namespace CustomSong
 
             if (token.GetArrayLength() > ChartInfo.Difficulties)
             {
-#if DEBUG
-                reason = $"\"preview_seconds\" has {token.GetArrayLength()} entries, " +
-                         $"not at most {ChartInfo.Difficulties}";
-#endif
                 return false;
             }
 
@@ -103,9 +87,6 @@ namespace CustomSong
                     !Seconds(item[0], 0, out float start, out reason) ||
                     !Seconds(item[1], 1, out float end, out reason))
                 {
-#if DEBUG
-                    reason = $"\"preview_seconds\"[{d}]: {reason ?? "is not a pair of seconds"}";
-#endif
                     return false;
                 }
 
@@ -114,9 +95,6 @@ namespace CustomSong
 
             if (slots[0] == null)
             {
-#if DEBUG
-                reason = "\"preview_seconds\"[0] is missing";
-#endif
                 return false;
             }
 
@@ -132,17 +110,11 @@ namespace CustomSong
 
             if (!root.TryGetProperty(key, out token) || token.ValueKind == JsonValueKind.Null)
             {
-#if DEBUG
-                reason = $"\"{key}\" is missing";
-#endif
                 return false;
             }
 
             if (token.ValueKind != JsonValueKind.Array)
             {
-#if DEBUG
-                reason = $"\"{key}\" is not a list";
-#endif
                 return false;
             }
 
@@ -156,9 +128,6 @@ namespace CustomSong
             int count = token.GetArrayLength();
             if (count == 0 || count > ChartInfo.Difficulties)
             {
-#if DEBUG
-                reason = $"\"{key}\" has {count} entries, not 1 to {ChartInfo.Difficulties}";
-#endif
                 return false;
             }
 
@@ -170,9 +139,6 @@ namespace CustomSong
 
                 if (item.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(item.GetString()))
                 {
-#if DEBUG
-                    reason = $"\"{key}\"[{d}] is not a name";
-#endif
                     return false;
                 }
 
@@ -190,9 +156,6 @@ namespace CustomSong
             int count = token.GetArrayLength();
             if (count == 0 || count > ChartInfo.Difficulties)
             {
-#if DEBUG
-                reason = $"\"{key}\" has {count} entries, not 1 to {ChartInfo.Difficulties}";
-#endif
                 return false;
             }
 
@@ -203,17 +166,11 @@ namespace CustomSong
 
                 if (item.ValueKind != JsonValueKind.String)
                 {
-#if DEBUG
-                    reason = $"\"{key}\"[{d}] is not a string";
-#endif
                     return false;
                 }
 
                 if (!LocalFileAt(folder, key, item.GetString(), allowed, out string path, out reason))
                 {
-#if DEBUG
-                    reason = $"\"{key}\"[{d}]: {reason}";
-#endif
                     return false;
                 }
 
@@ -236,9 +193,6 @@ namespace CustomSong
 
             if (slots[0] == null)
             {
-#if DEBUG
-                reason = $"\"{key}\"[0] is missing";
-#endif
                 return null;
             }
 

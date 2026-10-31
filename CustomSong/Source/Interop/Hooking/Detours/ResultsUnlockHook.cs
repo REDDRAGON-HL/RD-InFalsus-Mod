@@ -58,6 +58,7 @@ namespace CustomSong
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static void UnlockFillDetour(IntPtr self, IntPtr before, IntPtr after, IntPtr methodInfo)
         {
+            Alive(Hook.ResultsUnlock);
             UnlockFills++;
 
             if (!Faulted)

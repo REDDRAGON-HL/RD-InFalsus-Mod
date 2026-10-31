@@ -99,5 +99,6 @@ namespace CustomSong
     internal static class ModLog
     {
         internal static void Load(string message) => Console.WriteLine("[log] " + message);
+        internal static void WarnRelease(string message) => Console.WriteLine("[warn] " + message);
     }
 }

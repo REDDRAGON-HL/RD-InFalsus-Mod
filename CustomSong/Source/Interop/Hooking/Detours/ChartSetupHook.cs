@@ -51,6 +51,8 @@ namespace CustomSong
         private static void ChartSetupDetour(IntPtr self, IntPtr name, long id, IntPtr chart,
                                              IntPtr sourceText, byte flag)
         {
+            Alive(Hook.ChartSetup);
+
             try
             {
                 int notes = Count(chart, TupleNotes);

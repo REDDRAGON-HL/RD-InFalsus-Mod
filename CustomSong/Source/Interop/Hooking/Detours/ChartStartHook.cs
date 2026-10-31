@@ -36,6 +36,7 @@ namespace CustomSong
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static IntPtr RkDetour(IntPtr self, IntPtr methodInfo)
         {
+            Alive(Hook.ChartStart);
             ChartStarts++;
             ModLog.Load("chart start");
 

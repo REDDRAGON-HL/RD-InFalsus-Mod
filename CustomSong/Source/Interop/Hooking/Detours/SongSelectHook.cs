@@ -68,6 +68,8 @@ namespace CustomSong
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static void PreviewRecordDetour(IntPtr self, IntPtr songInfo, IntPtr methodInfo)
         {
+            Alive(Hook.PreviewRecord);
+
             if (!Faulted)
             {
                 try
@@ -97,6 +99,7 @@ namespace CustomSong
         private static byte MnDetour(IntPtr self, ushort songId, byte difficulty, int transition,
                                      IntPtr methodInfo)
         {
+            Alive(Hook.SongSelectApply);
             ApplyCalls++;
             bool shadowed = false;
             if (!Faulted)
@@ -161,6 +164,7 @@ namespace CustomSong
         private static byte DifficultyDetour(IntPtr save, IntPtr access, IntPtr songInfo, byte difficulty,
                                              byte flags, IntPtr methodInfo)
         {
+            Alive(Hook.DifficultyState);
             DifficultyAsked++;
 
             if (!Faulted)

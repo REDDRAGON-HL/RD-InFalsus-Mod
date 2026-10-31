@@ -7,7 +7,7 @@ namespace CustomSong
 {
     internal static class CustomSongCore
     {
-        internal const string Version = "1.1.1";
+        internal const string Version = "1.1.2";
         private static List<ChartPack> _packs = new List<ChartPack>();
         private static bool _registered;
         private static bool _packVisualsDone;
@@ -28,23 +28,26 @@ namespace CustomSong
         {
             try
             {
+                long mark = Timing.Now;
+
                 if (!ChartCodec.Resolve())
                 {
                     ModLog.Error("the game's chart decoder could not be reached; no charts will load");
                     return;
                 }
 
-                StreamingAssets.Resolve();
+                bool assetsReady = StreamingAssets.Resolve();
                 _root = ChartFolderLibrary.Locate();
-
+                mark = Timing.Now;
                 _packs = ChartFolderLibrary.ImportPacks(_root, Validate);
+                mark = Timing.Now;
                 _fingerprint = Fingerprint(_root);
-
                 int total = 0;
                 foreach (ChartPack pack in _packs) total += pack.Charts.Count;
                 ModLog.Load($"packs: {_packs.Count}, charts: {total}");
-
+                mark = Timing.Now;
                 ChartPoolPatch.Apply();
+                mark = Timing.Now;
             }
             catch (Exception e)
             {
@@ -55,13 +58,10 @@ namespace CustomSong
         internal static void Update()
         {
             if (!_hooksInstalled) InstallHooks();
-
             VideoBackground.Follow();
             AutoSwitch.NoteOpen("frame");
             AutoRow.Tick();
-            Auto.AutoHooks.Tick();
             Auto.AutoResults.Poll();
-
             if (_rescanIn > 0 && --_rescanIn == 0) HotReloadIfChanged();
 
             if (++_warm >= 20)
@@ -73,12 +73,6 @@ namespace CustomSong
             if (_registered)
             {
                 if (!_packVisualsDone) ApplyPackVisuals();
-                if (!_studioHunted)
-                {
-                    _studioHunted = true;
-                    StudioProject.Generate(_root, RescanSoon);
-                }
-
                 return;
             }
 
@@ -110,6 +104,7 @@ namespace CustomSong
         private static void InstallHooks()
         {
             _hooksInstalled = true;
+            long mark = Timing.Now;
             Hooks.Install();
             AutoSwitchHook.Install();
             AutoRowHooks.Install();
@@ -119,8 +114,6 @@ namespace CustomSong
 
         private static bool _hooksInstalled;
 
-        private static bool _studioHunted;
-
         internal static void RescanSoon()
         {
             if (_rescanIn <= 0) _rescanIn = 2;
@@ -128,14 +121,17 @@ namespace CustomSong
 
         internal static void HotReloadIfChanged()
         {
+            long mark = Timing.Now;
             string current = Fingerprint(_root);
+            double looked = Timing.Ms(mark);
             if (current == _fingerprint) return;
+            ModLog.Load($"timing: fingerprint {looked:F0} ms");
 
             if (!_registered || _songData == IntPtr.Zero || _packData == IntPtr.Zero)
             {
+                mark = Timing.Now;
                 _packs = ChartFolderLibrary.ImportPacks(_root, Validate);
-                _fingerprint = current;
-                StudioProject.Generate(_root, RescanSoon);
+                _fingerprint = Fingerprint(_root);
                 return;
             }
 
@@ -149,10 +145,9 @@ namespace CustomSong
                 AudioCatalog.Reset();
                 JacketCatalog.Reset();
                 BackgroundCatalog.Reset();
-
+                mark = Timing.Now;
                 _packs = ChartFolderLibrary.ImportPacks(_root, Validate);
-                _fingerprint = current;
-                StudioProject.Generate(_root, RescanSoon);
+                _fingerprint = Fingerprint(_root);
 
                 if (_packs.Count == 0)
                 {
@@ -164,6 +159,7 @@ namespace CustomSong
 
                 RegisterPacks();
                 ScoreStore.Refile();
+                mark = Timing.Now;
                 ApplyPackVisuals();
                 ModLog.Load("charts reloaded");
             }
@@ -175,14 +171,16 @@ namespace CustomSong
 
         private static void RegisterPacks()
         {
+            long mark = Timing.Now;
             List<ChartPack> ready = SongCatalog.SettlePacks(_packs, _songData);
             if (ready.Count == 0)
             {
                 ModLog.Error("no custom song could be registered");
                 return;
             }
-
+            mark = Timing.Now;
             int audio = RegisterAudio(ready);
+            mark = Timing.Now;
             int added = SongCatalog.InjectPacks(_songData, _packData, ready);
             _packs = ready;
 
@@ -211,9 +209,8 @@ namespace CustomSong
             }
 
             _visualsWaitingLogged = false;
-
+            long mark = Timing.Now;
             if (!ApplyVisualsTo(assets)) return;
-
             PackText.RefreshLookup(_packData);
             _packVisualsDone = true;
             ModLog.Load("pack visuals applied");
@@ -238,8 +235,13 @@ namespace CustomSong
 
             foreach (ChartPack pack in _packs)
             {
-                PackText.SetPackName(pack.PackId, pack.Name);
+                if (pack.Names != null) PackText.SetPackName(pack.PackId, pack.Names);
+                else PackText.SetPackName(pack.PackId, pack.Name);
                 int applied = PackText.SetPackVisuals(assets, pack.PackId, pack.Folder, pack.Visuals);
+
+                ModLog.Load($"pack '{pack.Name}' id={pack.PackId} " +
+                            $"table=0x{assets.ToInt64():X} visuals={applied} " +
+                            $"of {pack.Visuals.Count} drawn");
             }
 
             _visualTables.Add(assets);
@@ -312,6 +314,7 @@ namespace CustomSong
 
         private static string Validate(ChartInfo info)
         {
+            long mark = Timing.Now;
             byte[] scratch = new byte[32];
             for (int d = 0; d < ChartInfo.Difficulties; d++)
             {
@@ -336,12 +339,19 @@ namespace CustomSong
                 }
             }
 
+            double charts = Timing.Ms(mark);
+            mark = Timing.Now;
+
             if (!JacketCatalog.Add(info, out string jacketReason))
                 ModLog.Warn($"'{info.Name}' has no jacket of its own: {jacketReason}");
+            double jacket = Timing.Ms(mark);
+            mark = Timing.Now;
 
             if (!BackgroundCatalog.Add(info, out string backgroundReason))
                 ModLog.Warn($"'{info.Name}' has no background of its own: {backgroundReason}");
 
+            ModLog.Load($"timing: '{info.Name}' charts {charts:F0} ms, jacket {jacket:F0} ms, " +
+                        $"background {Timing.Ms(mark):F0} ms");
             return null;
         }
     }

@@ -9,9 +9,7 @@ namespace CustomSong
     internal static class ChartFolderLibrary
     {
         private const string FolderName = "Charts";
-
         private const string DefaultPack = "Custom Song";
-
         private static string _located;
 
         internal static string ModFolder()
@@ -58,7 +56,6 @@ namespace CustomSong
         internal static string Locate()
         {
             if (_located != null) return _located;
-
             string mod = ModFolder();
             if (mod == null) return null;
             DirectoryInfo parent = Directory.GetParent(mod);
@@ -157,7 +154,10 @@ namespace CustomSong
 
                 foreach (string song in songs)
                 {
-                    if (!File.Exists(Path.Combine(song, "if")))
+                    if (!File.Exists(Path.Combine(song, IfReader.InfoFileName)))
+                        StudioProject.EnsureIf(song);
+
+                    if (!File.Exists(Path.Combine(song, IfReader.InfoFileName)))
                     {
                         string deeper = Nested(song);
                         ModLog.WarnRelease(deeper == null
@@ -198,10 +198,43 @@ namespace CustomSong
                     JsonElement root = document.RootElement;
                     if (root.ValueKind == JsonValueKind.Object)
                     {
-                        if (root.TryGetProperty("name", out JsonElement title) &&
-                            title.ValueKind == JsonValueKind.String &&
-                            !string.IsNullOrWhiteSpace(title.GetString()))
-                            pack.Name = title.GetString().Trim();
+                        if (root.TryGetProperty("name", out JsonElement title))
+                        {
+                            if (title.ValueKind == JsonValueKind.String &&
+                                !string.IsNullOrWhiteSpace(title.GetString()))
+                            {
+                                pack.Name = title.GetString().Trim();
+                            }
+                            else if (title.ValueKind == JsonValueKind.Array &&
+                                     title.GetArrayLength() == 5)
+                            {
+                                var names = new string[5];
+                                bool okay = true;
+
+                                for (int i = 0; i < names.Length; i++)
+                                {
+                                    JsonElement entry = title[i];
+                                    if (entry.ValueKind != JsonValueKind.String ||
+                                        string.IsNullOrWhiteSpace(entry.GetString()))
+                                    {
+                                        okay = false;
+                                        break;
+                                    }
+                                    names[i] = entry.GetString();
+                                }
+
+                                if (okay)
+                                {
+                                    pack.Names = names;
+                                    pack.Name = names[0];
+                                }
+                                else
+                                {
+                                    ModLog.Warn($"pack.json in '{name}': 'name' needs five non-empty " +
+                                                "language strings; the folder name is used instead");
+                                }
+                            }
+                        }
 
                         if (root.TryGetProperty("visuals", out JsonElement visuals) &&
                             visuals.ValueKind == JsonValueKind.Object)

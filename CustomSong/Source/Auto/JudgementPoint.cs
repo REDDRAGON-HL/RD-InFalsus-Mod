@@ -48,6 +48,7 @@ namespace CustomSong.Auto
             if (hidden != _lastShape)
             {
                 _lastShape = hidden;
+                ModLog.Load($"autoplay: sky judgement point {hidden}/{Parts.Length} objects off");
             }
         }
 
@@ -75,6 +76,7 @@ namespace CustomSong.Auto
                 }
             }
 
+            ModLog.Load($"autoplay: sky judgement point {restored} object(s) restored");
         }
 
         internal static void KeepOff(IntPtr track)
@@ -108,51 +110,7 @@ namespace CustomSong.Auto
             }
         }
 
-        private static readonly List<IntPtr> Tracks = new List<IntPtr>();
-
-        internal static void NoteTrack(IntPtr track)
-        {
-            if (!Memory.LooksLikeObject(track)) return;
-
-            Tracks.Remove(track);
-            Tracks.Add(track);
-
-            while (Tracks.Count > TrackLimit) Tracks.RemoveAt(0);
-        }
-
-        private const int TrackLimit = 32;
-
-        internal static IntPtr AnyEngine()
-        {
-            for (int i = Tracks.Count - 1; i >= 0; i--)
-            {
-                if (!Memory.LooksLikeObject(Tracks[i])) continue;
-
-                IntPtr engine = Memory.Ptr(Tracks[i] + AutoOffsets.Track.Engine);
-                if (Memory.LooksLikeObject(engine)) return engine;
-            }
-
-            return IntPtr.Zero;
-        }
-
-        internal static void KeepOffAll()
-        {
-            for (int i = 0; i < Tracks.Count; i++)
-            {
-                if (!Memory.LooksLikeObject(Tracks[i]))
-                {
-                    Tracks.RemoveAt(i);
-                    i--;
-                    continue;
-                }
-
-                try { KeepOff(Tracks[i]); }
-                catch (Exception e) { NoteFailure(e); }
-            }
-        }
-
-        internal static void NoteFailure(Exception e)
-        {
+        internal static void NoteFailure(Exception e)        {
             _failures++;
             if (_failures <= 3)
                 ModLog.Warn($"autoplay: the sky judgement point could not be hidden ({_failures}): " +

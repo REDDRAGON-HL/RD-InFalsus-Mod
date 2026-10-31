@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>StudioCheck</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="Stubs.cs" />
+    <Compile Include="..\..\Source\Charts\StudioProject.cs" />
+    <Compile Include="..\..\Source\Charts\IfReader.cs" />
+    <Compile Include="..\..\Source\Charts\IfReader.PerDifficulty.cs" />
+    <Compile Include="..\..\Source\Charts\ChartInfo.cs" />
+  </ItemGroup>
+</Project>

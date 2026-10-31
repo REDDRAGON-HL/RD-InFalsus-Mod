@@ -2,12 +2,12 @@
 
 In Falsus 的 mod，都提供 **MelonLoader** 和 **BepInEx 6 IL2CPP** 构建
 
-| Mod                        | 作用                               | 版本  |
-| -------------------------- | ---------------------------------- | ----- |
-| **InFalsusScoreCountdown** | 把游玩界面左上角的当前分换成倒扣分 | 3.0.0 |
-| **InFalsusTextureSwap**    | 运行时替换已加载的立绘             | 1.2.0 |
-| **InFalsusNoIotaLimit**    | 取消 1.0.7 的 9999 粒子总数上限    | 1.0.1 |
-| **CustomSong**             | 从 `Charts/` 加载自制曲包          | 1.1.1 |
+| Mod                        | 作用                               | 版本  | README                                                                                |
+| -------------------------- | ---------------------------------- | ----- | ------------------------------------------------------------------------------------- |
+| **InFalsusScoreCountdown** | 把游玩界面左上角的当前分换成倒扣分 | 3.0.0 | [BepInEx](ScoreCountdown.BepInEx/README.md) · [MelonLoader](ScoreCountdown/REDAME.md) |
+| **InFalsusTextureSwap**    | 运行时替换已加载的立绘             | 1.2.0 | [使用与配置](TextureSwap.BepInEx/README.md) · [做图流程](TextureSwap/README.md)       |
+| **InFalsusNoIotaLimit**    | 取消 1.0.7 的 9999 粒子总数上限    | 1.0.1 | [BepInEx](NoIotaLimit/README.md) · [MelonLoader](NoIotaLimit.Melon/README.md)         |
+| **CustomSong**             | 从 `Charts/` 加载自制曲包          | 1.1.2 | [README](CustomSong/README.md) · [if 文件示例](CustomSong/if.md)                      |
 
 ## 目录
 

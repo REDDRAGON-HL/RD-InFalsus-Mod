@@ -1,9 +1,11 @@
 extern alias UnityEngineCore;
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using UnityEngineCore::UnityEngine;
+using Il2CppInterop.Runtime.InteropTypes;
 
 namespace CustomSong.Auto
 {
@@ -14,23 +16,9 @@ namespace CustomSong.Auto
 
     internal static unsafe class AutoResults
     {
-        private const int RvaResultsStart = 0x727DF0;
-        private const int RvaResultsDestroy = 0x727C20;
-        private const int RvaIotaAdd = 0x4A6BF0;
+        private const int RvaContainerAwake = 0x71E0C0;
         private delegate void StartFn(IntPtr self);
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct Iota
-        {
-            private long _a, _b, _c, _d;
-        }
-
-        private delegate void AddFn(IntPtr self, Iota instance, IntPtr methodInfo);
         private delegate void TextFn(IntPtr self, IntPtr text, byte updateType);
-        private static NativeHook<StartFn> _start;
-        private static StartFn _startTramp;
-        private static NativeHook<StartFn> _destroy;
-        private static StartFn _destroyTramp;
         private static NativeHook<StartFn> _containerAwake;
         private static StartFn _containerAwakeTramp;
         private static IntPtr _container;
@@ -47,70 +35,18 @@ namespace CustomSong.Auto
         private static int _rewardBanner;
         private static int _battleLayer;
         private static bool _asked;
-        private static IntPtr _noop;
-        private static NativeHook<AddFn> _blocker;
-        private static IntPtr _addTarget;
+        private static bool _blockOn;
+        private static long _addCalls, _addBlocked;
+        internal static void BlockParticles(bool on) => _blockOn = on;
 
-        internal static void BlockParticles(bool on)
+        private static bool BeforeAdd()
         {
-            try
-            {
-                if (on)
-                {
-                    if (_blocker != null) return;
-                    if (_noop == IntPtr.Zero) _noop = Noop();
-                    if (_noop == IntPtr.Zero) return;
-
-                    if (_addTarget == IntPtr.Zero)
-                    {
-                        _addTarget = MethodResolver.ByName("IotaInventory", "Add");
-                        if (_addTarget == IntPtr.Zero)
-                            _addTarget = MethodResolver.ByRuntime("IotaInventory", "Add", "Game.Data.dll",
-                                                                  "ifapp.Game.Data");
-                        if (_addTarget == IntPtr.Zero && GameAssembly.Base != IntPtr.Zero)
-                            _addTarget = GameAssembly.Base + RvaIotaAdd;
-                    }
-
-                    if (_addTarget == IntPtr.Zero) return;
-                    _blocker = new NativeHook<AddFn> { Target = _addTarget, Detour = _noop };
-                    _blocker.Attach();
-                    ModLog.Load("autoplay: the inventory no longer takes particles");
-                }
-                else if (_blocker != null)
-                {
-                    _blocker.Detach();
-                    _blocker = null;
-                    ModLog.Load("autoplay: the inventory takes particles again");
-                }
-            }
-            catch (Exception e)
-            {
-                ModLog.WarnRelease("autoplay: the particle block could not be switched: " + ModLog.Describe(e));
-                _blocker = null;
-            }
+            _addCalls++;
+            if (_addCalls == 1) ModLog.Load("autoplay: the inventory's Add is live");
+            if (!_blockOn) return true;
+            _addBlocked++;
+            return false;
         }
-
-        private static IntPtr Noop()
-        {
-            IntPtr memory = System.Runtime.InteropServices.Marshal.AllocHGlobal(64);
-            if (memory == IntPtr.Zero) return IntPtr.Zero;
-            byte* at = (byte*)memory;
-            at[0] = 0xC3;
-            uint old;
-            if (!VirtualProtect(memory, 64, 0x40 , out old))
-            {
-                ModLog.WarnRelease("autoplay: the particle block could not be made executable");
-                return IntPtr.Zero;
-            }
-
-            return memory;
-        }
-
-        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
-        private static extern bool VirtualProtect(IntPtr address, IntPtr size, uint protection, out uint old);
-
-        private static bool VirtualProtect(IntPtr address, int size, uint protection, out uint old) =>
-            VirtualProtect(address, (IntPtr)size, protection, out old);
 
         internal static void Install()
         {
@@ -122,14 +58,20 @@ namespace CustomSong.Auto
             void Count(bool ok) { attempted++; if (ok) installed++; }
 
             ResultsSkip.Install();
+            MethodInfo start = HarmonyHooks.Target("ResultsScene", "Start", "ifapp.Game.Scenes");
+            Count(HarmonyHooks.Patch(start,
+                HarmonyHooks.Handler(typeof(AutoResults), nameof(StartPrefix)),
+                HarmonyHooks.Handler(typeof(AutoResults), nameof(StartPostfix)),
+                HarmonyHooks.Handler(typeof(AutoResults), nameof(StartFinalizer))));
+            MethodInfo destroy = HarmonyHooks.Target("ResultsScene", "OnDestroy", "ifapp.Game.Scenes");
+            Count(HarmonyHooks.Patch(destroy, null,
+                HarmonyHooks.Handler(typeof(AutoResults), nameof(DestroyPostfix))));
 
-            Count(Attach(ref _start, "ResultsScene", "Start", "ifapp.Game.Scenes", RvaResultsStart,
-                         (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, void>)&StartDetour, out _startTramp));
-
-            Count(Attach(ref _destroy, "ResultsScene", "OnDestroy", "ifapp.Game.Scenes", RvaResultsDestroy,
-                         (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, void>)&DestroyDetour, out _destroyTramp));
-            Count(Attach(ref _containerAwake, "IotaDropsContainer", "Awake", "ifapp.Game.Scenes", 0x71E0C0,
+            Count(Attach(ref _containerAwake, "IotaDropsContainer", "Awake", "ifapp.Game.Scenes", RvaContainerAwake,
                          (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, void>)&ContainerAwakeDetour, out _containerAwakeTramp));
+            MethodInfo add = HarmonyHooks.Target("IotaInventory", "Add", "ifapp.Game.Data");
+            bool addPatched = HarmonyHooks.Patch(add,
+                HarmonyHooks.Handler(typeof(AutoResults), nameof(BeforeAdd)));
             IntPtr text = StringSetter();
 
             if (text != IntPtr.Zero)
@@ -137,7 +79,7 @@ namespace CustomSong.Auto
 
             ModLog.Load($"autoplay: results hooks {installed}/{attempted}" +
                         $", text={(text != IntPtr.Zero ? "yes" : "no")}" +
-                        "");
+                        $", inventory={(addPatched ? "watched" : "not watched")}");
         }
 
         internal static unsafe IntPtr StringSetter()
@@ -178,8 +120,6 @@ namespace CustomSong.Auto
 
         internal static void Uninstall()
         {
-            _start?.Detach(); _start = null; _startTramp = null;
-            _destroy?.Detach(); _destroy = null; _destroyTramp = null;
             _containerAwake?.Detach(); _containerAwake = null; _containerAwakeTramp = null;
             _asked = false;
         }
@@ -223,27 +163,23 @@ namespace CustomSong.Auto
             return true;
         }
 
-        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-        private static void StartDetour(IntPtr self)
+        private static void StartPrefix(Il2CppObjectBase __instance)
         {
-            try
-            {
-                _startTramp(self);
-            }
-            catch (Exception e)
-            {
-                ModLog.Error("autoplay: the results screen threw while it was being built: " +
-                             ModLog.Describe(e));
-                AutoMark.Ran = false;
-                return;
-            }
+            if (AutoMark.Ran)
+                ModLog.Load("autoplay: the results screen is starting" +
+                            (ScoreStore.EncounterRan ? " (with a recollection)" : ""));
+        }
 
+        private static void StartPostfix(Il2CppObjectBase __instance)
+        {
             if (!AutoMark.Ran) return;
 
             try
             {
-                Plain(self);
-                Decorate(self);
+                ModLog.Load("autoplay: the results screen is up");
+                IntPtr scene = HarmonyHooks.Pointer(__instance);
+                Plain(scene);
+                Decorate(scene);
                 _decorated = true;
             }
             catch (Exception e)
@@ -252,28 +188,22 @@ namespace CustomSong.Auto
             }
         }
 
-        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-        private static void DestroyDetour(IntPtr self)
+        private static Exception StartFinalizer(Exception __exception)
         {
-            try
-            {
-                _destroyTramp(self);
-            }
-            catch (Exception e)
-            {
-                ModLog.Error("autoplay: the results screen threw while it was going away: " +
-                             ModLog.Describe(e));
-            }
-            OnLeavingResults();
+            if (__exception == null) return null;
+
+            ModLog.Error("autoplay: the results screen threw while it was being built: " +
+                         ModLog.Describe(__exception));
+            AutoMark.Ran = false;
+            return null;
         }
 
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static void ContainerAwakeDetour(IntPtr self)
         {
+            Hooks.Alive("IotaDropsContainer.Awake");
             _containerAwakeTramp(self);
-
             if (!AutoMark.Ran || _decorated) return;
-
             _container = Memory.LooksLikeObject(self) ? self : IntPtr.Zero;
         }
 
@@ -281,22 +211,17 @@ namespace CustomSong.Auto
         {
             if (_decorated) return;
             if (_container == IntPtr.Zero) return;
-
             IntPtr container = _container;
             _container = IntPtr.Zero;
-
             if (!AutoMark.Ran) return;
-
             IntPtr scene = SceneAbove(container);
 
             try
             {
                 ModLog.Load("autoplay: the results screen is up (from its drop container)");
-
                 if (scene != IntPtr.Zero) Plain(scene);
                 else ModLog.Load("autoplay: the screen object was not found above the drop container; " +
                                  "only the drop row is marked");
-
                 DecorateAt(container);
                 _decorated = true;
             }
@@ -312,16 +237,13 @@ namespace CustomSong.Auto
             {
                 Transform at = new Component(component).transform;
                 if (at == null) return IntPtr.Zero;
-
                 while (at.parent != null) at = at.parent;
-
                 GameObject root = at.gameObject;
                 if (root == null) return IntPtr.Zero;
 
                 foreach (Component part in root.GetComponentsInChildren<Component>(true))
                 {
                     if (part == null) continue;
-
                     IntPtr klass = Il2CppInterop.Runtime.IL2CPP.il2cpp_object_get_class(part.Pointer);
                     if (klass == IntPtr.Zero) continue;
                     if (Il2CppInterop.Runtime.IL2CPP.il2cpp_class_get_name_(klass) == "ResultsScene")
@@ -337,11 +259,12 @@ namespace CustomSong.Auto
             return IntPtr.Zero;
         }
 
+        private static void DestroyPostfix(Il2CppObjectBase __instance) => OnLeavingResults();
+
         internal static void OnLeavingResults()
         {
             _decorated = false;
             _container = IntPtr.Zero;
-
             AutoMark.Ran = false;
             ScoreStore.EncounterRan = false;
             BlockParticles(false);
@@ -374,6 +297,7 @@ namespace CustomSong.Auto
             if (Show(_encounterBacking, false)) changed++;
             if (Show(_rewardBanner, false)) changed++;
             if (Show(_battleLayer, false)) changed++;
+            ModLog.Load($"autoplay: {changed}/4 recollection object(s) put away");
         }
 
         private static void Decorate(IntPtr scene)
@@ -383,23 +307,15 @@ namespace CustomSong.Auto
             if (!Memory.LooksLikeObject(container))
             {
                 ModLog.WarnRelease("autoplay: the results screen has no drop container to mark");
-                    return;
+                Report();
+                return;
             }
 
-            int shown = 0;
-            shown += Show(container, _failed, true);
-            shown += Show(container, _assist, false);
-            shown += Show(container, _left, false);
-            shown += Show(container, _right, false);
-            shown += HideCells(container);
-            int texts = WriteTexts(container);
-            ModLog.Load($"autoplay: results marked ({shown} object(s) switched, {texts} text(s))");
+            DecorateAt(container);
         }
 
         private static void DecorateAt(IntPtr container)
         {
-            if (!Memory.LooksLikeObject(container)) return;
-
             int shown = 0;
             shown += Show(container, _failed, true);
             shown += Show(container, _assist, false);
@@ -408,6 +324,7 @@ namespace CustomSong.Auto
             shown += HideCells(container);
             int texts = WriteTexts(container);
             ModLog.Load($"autoplay: results marked ({shown} object(s) switched, {texts} text(s))");
+            Report();
         }
 
         private static int HideCells(IntPtr container)
@@ -478,6 +395,22 @@ namespace CustomSong.Auto
             return written;
         }
 
+        private static void Report()
+        {
+            if (!CurrentSong.TryRead(out IntPtr song, out int difficulty))
+            {
+                ModLog.Load($"autoplay: results could not name the song (reads {ScoreStore.Reads}, " +
+                            $"served {ScoreStore.Served})");
+                return;
+            }
 
+            ushort id = Offsets.Ready ? Memory.U16(song + Offsets.Song.Id) : (ushort)0;
+            bool ours = ScoreStore.IsOurs(song);
+            ulong stored = ours ? Hooks.StoredScore(ScoreStore.Table, song, 1 << difficulty) : 0;
+
+            ModLog.Load($"autoplay: results song {id} difficulty {difficulty} ours={ours} " +
+                        $"stored={stored} (reads {ScoreStore.Reads}, served {ScoreStore.Served}, " +
+                        $"updates {ScoreStore.Updates})");
+        }
     }
 }

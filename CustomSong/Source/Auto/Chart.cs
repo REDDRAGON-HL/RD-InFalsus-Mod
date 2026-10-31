@@ -19,6 +19,7 @@ namespace CustomSong.Auto
         private int _reads;
         private int _attempts;
         private double _lastReadMs = double.NegativeInfinity;
+        private int _publishedCount = -1;
 
         internal bool TryLoad(IntPtr lnp, double nowMs)
         {
@@ -156,7 +157,27 @@ namespace CustomSong.Auto
             SkyCount = sky;
             Loaded = true;
             Revision++;
+            if (notes.Length == _publishedCount) return;
+            _publishedCount = notes.Length;
+            Describe(notes);
         }
 
+        private static void Describe(ChartNote[] notes)
+        {
+            var sides = new int[8];
+            var types = new int[8];
+            foreach (ChartNote n in notes)
+            {
+                if (n.Side >= 0 && n.Side < sides.Length) sides[n.Side]++;
+                if (n.Type >= 0 && n.Type < types.Length) types[n.Type]++;
+            }
+
+            var sb = new System.Text.StringBuilder($"autoplay: chart {notes.Length} notes | sides");
+            for (int i = 0; i < sides.Length; i++) if (sides[i] > 0) sb.Append($" {i}={sides[i]}");
+            sb.Append(" | types");
+            for (int i = 0; i < types.Length; i++) if (types[i] > 0) sb.Append($" {i}={types[i]}");
+            sb.Append($" | {notes[0].StartMs / 1000.0:F1}s..{notes[notes.Length - 1].StartMs / 1000.0:F1}s");
+            ModLog.Load(sb.ToString());
+        }
     }
 }

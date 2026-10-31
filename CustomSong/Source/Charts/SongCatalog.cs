@@ -341,7 +341,7 @@ namespace CustomSong
                     IntPtr slot = songs + Offsets.Runtime.ArrayDataOffset + id * SongInfoSize;
                     Buffer.MemoryCopy((void*)(oldSongs + Offsets.Runtime.ArrayDataOffset), (void*)slot,
                                       SongInfoSize, SongInfoSize);
-                    Memory.WritePtr(slot + SongInfoTitleReading, BuildReadings(titleTemplate, chart.Name));
+                    Memory.WritePtr(slot + SongInfoTitleReading, BuildReadings(titleTemplate, chart.Titles));
                     Memory.WritePtr(slot + SongInfoArtistReading, Str(chart.Composer));
                     Memory.WriteU16(slot + SongInfoId, (ushort)id);
                     Memory.WritePtr(slot + SongInfoBaseName, Str(chart.BaseName));
@@ -362,7 +362,7 @@ namespace CustomSong
                 foreach (ChartInfo chart in pack.Charts)
                 {
                     int id = oldCount + running++;
-                    PackText.SetSongText(PackText.SongText.Title, id, chart.Name);
+                    PackText.SetSongText(PackText.SongText.Title, id, chart.Titles);
                     PackText.SetSongText(PackText.SongText.Artist, id, chart.Composer);
                     PackText.SetSongText(PackText.SongText.Illustrator, id, IllustratorOf(chart, 0));
                 }
@@ -402,6 +402,7 @@ namespace CustomSong
                 Memory.WritePtr(mine + PackInfoSongs, songIds[i]);
                 packs[i].PackId = packId;
                 CustomPackIds.Add(packId);
+                ModLog.Load($"pack '{packs[i].Name}' id={packId}");
             }
 
             long rest = (long)(oldCount - CustomPackIndex) * PackInfoSize;
@@ -413,6 +414,7 @@ namespace CustomSong
                 IntPtr slot = packsArray + Offsets.Runtime.ArrayDataOffset + i * PackInfoSize;
                 int id = Memory.U16(slot + PackInfoId);
                 string slug = Memory.Text(Memory.Ptr(slot + PackInfoSlug));
+                ModLog.Load($"pack array[{i}] id={id} slug='{slug}'");
             }
 
             return true;
@@ -532,23 +534,47 @@ namespace CustomSong
                 ModLog.Error($"the game's song list refresh raised: {Raised.Text(raised)}");
         }
 
-        private static IntPtr BuildReadings(IntPtr template, string text)
+        private static IntPtr BuildReadings(IntPtr template, string[] titles)
         {
             if (!Memory.LooksLikeObject(template)) return IntPtr.Zero;
+            if (titles == null || titles.Length != 5)
+            {
+                ModLog.Error("the song name does not have five language slots; " +
+                             "its title keeps the localisation-table text");
+                return IntPtr.Zero;
+            }
+
             int locales = Memory.I32(template + Offsets.Runtime.ArrayLength);
             if (locales <= 0 || locales > LocaleLimit)
             {
                 ModLog.Warn($"the shipped title readings hold no locale count ({locales}); " +
-                                 $"'{text}' keeps its name from the localisation table");
+                                 $"'{titles[0]}' keeps its name from the localisation table");
                 return IntPtr.Zero;
             }
 
             IntPtr array = NewArray(template, locales);
             if (array == IntPtr.Zero) return IntPtr.Zero;
-            IntPtr value = Str(text);
+
             for (int i = 0; i < locales; i++)
+            {
+                IntPtr value = Str(ReadingFor(titles, i));
                 Memory.WritePtr(array + Offsets.Runtime.ArrayDataOffset + i * IntPtr.Size, value);
+            }
+
             return array;
+        }
+
+        private static string ReadingFor(string[] titles, int locale)
+        {
+            switch (locale)
+            {
+                case 1: return titles[2];
+                case 2: return titles[3];
+                case 3: return titles[4];
+                case 4: return titles[1];
+                case 5: return titles[0];
+                default: return titles[2];
+            }
         }
 
         private static IntPtr BuildCharts(IntPtr template, ChartInfo info)

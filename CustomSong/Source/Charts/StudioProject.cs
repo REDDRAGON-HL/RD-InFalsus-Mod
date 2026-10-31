@@ -5,14 +5,12 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Threading;
 
 namespace CustomSong
 {
     internal static class StudioProject
     {
         internal const string FileName = "infalsus.studio.json";
-
         private const string WorkFolder = ".ifstudio";
         private const int FallbackPreviewSeconds = 30;
 
@@ -28,20 +26,16 @@ namespace CustomSong
 
             using (var writer = new Utf8JsonWriter(stream, Writer))
                 document.WriteTo(writer);
-
             return Encoding.UTF8.GetString(stream.ToArray());
         }
 
         internal static bool EnsureIf(string folder)
         {
             if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder)) return false;
-
             string ifPath = Path.Combine(folder, IfReader.InfoFileName);
             if (File.Exists(ifPath)) return false;
-
             string projectPath = Path.Combine(folder, FileName);
             if (!File.Exists(projectPath)) return false;
-
             string name = Path.GetFileName(folder);
 
             try
@@ -65,40 +59,9 @@ namespace CustomSong
             }
         }
 
-        internal static void Generate(string root, Action whenWritten)
-        {
-            if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) return;
-            if (Interlocked.CompareExchange(ref _busy, 1, 0) != 0) return;
-
-            ThreadPool.QueueUserWorkItem(_ =>
-            {
-                bool wrote = false;
-
-                try
-                {
-                    foreach (string pack in Directory.GetDirectories(root))
-                    foreach (string song in Directory.GetDirectories(pack))
-                        wrote |= EnsureIf(song);
-                }
-                catch (Exception e)
-                {
-                    ModLog.WarnRelease($"the Studio projects could not be looked over: {ModLog.Describe(e)}");
-                }
-                finally
-                {
-                    Volatile.Write(ref _busy, 0);
-                }
-
-                if (wrote) whenWritten?.Invoke();
-            });
-        }
-
-        private static int _busy;
-
         private static JsonNode Build(string folder, string projectPath, out string reason)
         {
             reason = null;
-
             using JsonDocument document = JsonDocument.Parse(File.ReadAllBytes(projectPath));
             JsonElement root = document.RootElement;
 
@@ -121,7 +84,6 @@ namespace CustomSong
             var level = new JsonArray();
             var jacket = new JsonArray();
             var illust = new JsonArray();
-
             int taken = 0;
 
             if (root.TryGetProperty("difficulties", out JsonElement list) &&
@@ -132,7 +94,6 @@ namespace CustomSong
                 foreach (JsonElement item in list.EnumerateArray())
                 {
                     if (slot >= ChartInfo.Difficulties) break;
-
                     bool charted = Whole(item, "rating", out int rating);
                     string file = charted
                         ? ChartOf(folder, Text(item, "working")) ?? ChartOf(folder, Text(item, "source"))
@@ -154,10 +115,8 @@ namespace CustomSong
 
                     string own = Text(item, "jacket");
                     jacket.Add(Filed(folder, own) ? own : Filed(folder, Text(root, "jacket")) ? Text(root, "jacket") : null);
-
                     string drawn = Text(item, "jacketDesigner");
                     illust.Add(string.IsNullOrEmpty(drawn) ? null : drawn);
-
                     slot++;
                 }
             }
@@ -173,7 +132,7 @@ namespace CustomSong
 
             if (taken == 0)
             {
-                reason = "no difficulty points at a chart file";
+                reason = "no difficulty has a chart, a designer and a whole-number rating";
                 return null;
             }
 
@@ -197,9 +156,7 @@ namespace CustomSong
             result["charter"] = charter;
             result["chart"] = chart;
             result["lv"] = level;
-
             if (!AllNull(illust)) result["illust"] = illust;
-
             return result;
         }
 
@@ -210,7 +167,6 @@ namespace CustomSong
 
             foreach (JsonNode value in values)
                 if (value == null || value.GetValue<string>() != first) return false;
-
             return true;
         }
 
@@ -218,7 +174,6 @@ namespace CustomSong
         {
             foreach (JsonNode value in values)
                 if (value != null) return false;
-
             return true;
         }
 
@@ -229,7 +184,6 @@ namespace CustomSong
         {
             start = Seconds(root, "previewStartSeconds");
             end = Seconds(root, "previewEndSeconds");
-
             int length = AudioCodec.Measure(songPath, out _);
             float limit = length > 1 ? length - 1f : 0f;
 
@@ -254,18 +208,15 @@ namespace CustomSong
             if (token.ValueKind == JsonValueKind.String &&
                 float.TryParse(token.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out float value))
                 return value;
-
             return 0f;
         }
 
         private static string ChartOf(string folder, string working)
         {
             if (string.IsNullOrEmpty(working)) return null;
-
             string relative = working.Replace('\\', '/');
             string source = Path.GetFullPath(Path.Combine(folder, relative.Replace('/', Path.DirectorySeparatorChar)));
             string name = Path.GetFileName(source);
-
             if (name.Length == 0 || !File.Exists(source)) return null;
 
             if (relative.StartsWith(WorkFolder + "/", StringComparison.OrdinalIgnoreCase))
@@ -302,7 +253,6 @@ namespace CustomSong
 
             if (item.ValueKind != JsonValueKind.Object || !item.TryGetProperty(key, out JsonElement token))
                 return false;
-
             if (token.ValueKind == JsonValueKind.Number) return token.TryGetInt32(out value);
 
             return token.ValueKind == JsonValueKind.String &&

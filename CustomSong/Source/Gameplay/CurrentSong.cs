@@ -56,22 +56,7 @@ namespace CustomSong
         [System.Diagnostics.Conditional("DEBUG")]
         private static void Refused(IntPtr payload, string why)
         {
-#if DEBUG
-            if (_refused) return;
-            _refused = true;
-            var words = new System.Text.StringBuilder();
-            for (int i = 0; i < 12; i++)
-            {
-                if (i > 0) words.Append(' ');
-                words.Append(Memory.I64(payload + PayloadSong + i * 8).ToString("X16"));
-            }
-
-#endif
         }
-
-#if DEBUG
-        private static bool _refused;
-#endif
 
         private static int SelectedSong = Offsets.Unresolved;
         private static int SceneDifficulty = Offsets.Unresolved;

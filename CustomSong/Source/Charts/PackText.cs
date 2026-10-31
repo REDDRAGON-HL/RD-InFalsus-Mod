@@ -44,6 +44,7 @@ namespace CustomSong
             for (int i = count; i < wanted; i++)
                 Buffer.MemoryCopy((void*)shape, (void*)(target + i * stride), stride, stride);
             Memory.WritePtr(packAssets + PackAssetsTable, grown);
+            ModLog.Load($"pack visual rows: {count} -> {wanted} (shape=row {Math.Min(TemplateRow, count - 1)})");
             return true;
         }
 
@@ -146,6 +147,8 @@ namespace CustomSong
                     }
 
                     Built[materialKey] = material;
+                    ModLog.Load($"pack {packId} visual {field} off=0x{offset:X} " +
+                                $"src=0x{source.ToInt64():X} mat=0x{material.ToInt64():X}");
                 }
 
                 Memory.WritePtr(row + offset, material);
@@ -229,33 +232,49 @@ namespace CustomSong
         private static readonly int TextMappingValuesSize = 5 * IntPtr.Size;
         private static readonly int ValueEnglish = 0 * IntPtr.Size;
         private static readonly int ValueJapanese = 1 * IntPtr.Size;
+        private static readonly int ValueKorean = 2 * IntPtr.Size;
         private static readonly int ValueTraditionalChinese = 3 * IntPtr.Size;
         private static readonly int ValueSimplifiedChinese = 4 * IntPtr.Size;
         private static int _mappingOffset = int.MinValue;
 
         private enum TextWhat { PackName, SongText }
 
-        internal static bool SetPackName(int packId, string name)
+        private static string[] SameFive(string text) => new[] { text, text, text, text, text };
+
+        internal static bool SetPackName(int packId, string name) =>
+            SetPackName(packId, SameFive(name));
+
+        internal static bool SetPackName(int packId, string[] names)
         {
             if (!ResolveFields()) return false;
-            return SetText(PackIdTypeMapping, packId, name, TextWhat.PackName);
+            return SetText(PackIdTypeMapping, packId, names, TextWhat.PackName);
         }
 
         internal enum SongText { Title, Artist, Illustrator }
 
-        internal static bool SetSongText(SongText which, int songId, string text)
+        internal static bool SetSongText(SongText which, int songId, string text) =>
+            SetSongText(which, songId, SameFive(text));
+
+        internal static bool SetSongText(SongText which, int songId, string[] names)
         {
             if (!ResolveFields()) return false;
 
             int mappingField = which == SongText.Title ? SongTitleTypeMapping
                              : which == SongText.Artist ? SongArtistTypeMapping
                              : SongIllustratorTypeMapping;
-            return SetText(mappingField, songId, text, TextWhat.SongText);
+            return SetText(mappingField, songId, names, TextWhat.SongText);
         }
 
-        private static bool SetText(int mappingField, int id, string text, TextWhat what)
+        private static bool SetText(int mappingField, int id, string[] names, TextWhat what)
         {
             if (!ResolveFields()) return false;
+
+            if (names == null || names.Length != 5)
+            {
+                NotWritten(what, "the name does not have five language slots");
+                return false;
+            }
+
             IntPtr klass = FieldResolver.ClassPointer("DataAccess");
             if (klass == IntPtr.Zero) return false;
             IntPtr statics = FieldResolver.Statics(klass);
@@ -283,7 +302,8 @@ namespace CustomSong
                 return false;
             }
 
-            if (!Insert(table, id, text)) return false;
+            if (!Insert(table, id, names)) return false;
+
             return true;
         }
 
@@ -293,12 +313,7 @@ namespace CustomSong
 
         private static string Name(TextWhat what)
         {
-#if DEBUG
-            return what == TextWhat.PackName ? "the custom pack will have no name"
-                                             : "the song will have no text of its own";
-#else
             return null;
-#endif
         }
 
         private static int MappingOffset(IntPtr typeMapping)
@@ -334,17 +349,22 @@ namespace CustomSong
             return _mappingOffset = -1;
         }
 
-        private static unsafe bool Insert(IntPtr table, int packId, string name)
+        private static unsafe bool Insert(IntPtr table, int packId, string[] names)
         {
             ushort id = (ushort)packId;
             byte[] raw = new byte[TextMappingValuesSize];
             fixed (byte* values = raw)
             {
-                IntPtr text = Il2CppInterop.Runtime.IL2CPP.ManagedStringToIl2Cpp(name);
-                *(IntPtr*)(values + ValueEnglish) = text;
-                *(IntPtr*)(values + ValueJapanese) = text;
-                *(IntPtr*)(values + ValueTraditionalChinese) = text;
-                *(IntPtr*)(values + ValueSimplifiedChinese) = text;
+                *(IntPtr*)(values + ValueSimplifiedChinese) =
+                    Il2CppInterop.Runtime.IL2CPP.ManagedStringToIl2Cpp(names[0]);
+                *(IntPtr*)(values + ValueTraditionalChinese) =
+                    Il2CppInterop.Runtime.IL2CPP.ManagedStringToIl2Cpp(names[1]);
+                *(IntPtr*)(values + ValueEnglish) =
+                    Il2CppInterop.Runtime.IL2CPP.ManagedStringToIl2Cpp(names[2]);
+                *(IntPtr*)(values + ValueJapanese) =
+                    Il2CppInterop.Runtime.IL2CPP.ManagedStringToIl2Cpp(names[3]);
+                *(IntPtr*)(values + ValueKorean) =
+                    Il2CppInterop.Runtime.IL2CPP.ManagedStringToIl2Cpp(names[4]);
                 IntPtr* args = stackalloc IntPtr[2];
                 args[0] = (IntPtr)(&id);
                 args[1] = (IntPtr)values;

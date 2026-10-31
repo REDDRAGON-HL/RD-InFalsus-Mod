@@ -15,11 +15,6 @@ namespace CustomSong
             if (p == IntPtr.Zero) return false;
             _gab = (delegate* unmanaged[Cdecl]<IntPtr, IntPtr, IntPtr, IntPtr, IntPtr>)p;
 
-#if DEBUG
-            IntPtr reference = MethodResolver.MethodInfoOf("_S", "_Gab");
-            if (reference != IntPtr.Zero)
-#endif
-
             IntPtr hab = MethodResolver.ByName("_S", "_hab");
             if (hab == IntPtr.Zero) return false;
             _hab = (delegate* unmanaged[Cdecl]<IntPtr, IntPtr, IntPtr>)hab;
@@ -50,18 +45,12 @@ namespace CustomSong
 
             if (_gab == null)
             {
-#if DEBUG
-                reason = "the chart decoder could not be reached";
-#endif
                 return false;
             }
 
             IntPtr name = Il2CppInterop.Runtime.IL2CPP.ManagedStringToIl2Cpp(seed);
             if (name == IntPtr.Zero)
             {
-#if DEBUG
-                reason = $"the name '{seed}' could not be passed to the decoder";
-#endif
                 return false;
             }
 
@@ -82,24 +71,17 @@ namespace CustomSong
             IntPtr notes = Memory.Ptr(tuple32 + Offsets.Runtime.ChartTupleNotes);
             if (!Memory.TryList(notes, out IntPtr items, out int count))
             {
-#if DEBUG
-                reason = "the decoder returned no note list";
-#endif
                 return false;
             }
             if (count == 0)
             {
-#if DEBUG
-                reason = "the decoder found no notes (bad container, or encoded under another name)";
-#endif
+                reason = "the game's decoder found no notes in it (wrong bytes, or encoded under " +
+                         "another name)";
                 return false;
             }
 
             if (!MeasureNoteSize(items, count))
             {
-#if DEBUG
-                reason = "the note records could not be read this build";
-#endif
                 return false;
             }
 
@@ -113,29 +95,14 @@ namespace CustomSong
 
                 if (side < SideMin || side > SideMax)
                 {
-#if DEBUG
-                    reason = $"note {i} is on plane {side} under the name '{seed}'; " +
-                             "the file is probably not encoded under that name";
-                    Dump(items, count);
-#endif
                     return false;
                 }
                 if (!IsNoteType(type))
                 {
-#if DEBUG
-                    reason = $"note {i} has type {type} under the name '{seed}'; " +
-                             "the file is probably not encoded under that name";
-                    Dump(items, count);
-#endif
                     return false;
                 }
                 if (start < 0 || end < start || end > MaxChartMs)
                 {
-#if DEBUG
-                    reason = $"note {i} runs {start}..{end}ms under the name '{seed}'; " +
-                             "the file is probably not encoded under that name";
-                    Dump(items, count);
-#endif
                     return false;
                 }
             }

@@ -20,12 +20,6 @@ namespace CustomSong
         internal static long ChartStarts;
         internal static long MusicPauses, MusicResumes;
 
-#if DEBUG
-        internal static long TicksApa, TicksMia, TicksVc, TicksRead;
-        internal static long Now => System.Diagnostics.Stopwatch.GetTimestamp();
-        internal static double Ms(long ticks) => ticks * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
-#endif
-
         internal static int Installed { get; private set; }
         internal static int Attempted { get; private set; }
 
@@ -59,7 +53,7 @@ namespace CustomSong
 
         internal static void Uninstall()
         {
-            DetachSelectAwake();
+            HarmonyHooks.Uninstall();
             DetachSceneSwitch();
             DetachPlayGate();
             DetachResultsUnlock();
@@ -117,6 +111,7 @@ namespace CustomSong
             ResultsUnlock,
             PlayGate,
             SceneSwitch,
+            SelectAwake,
         }
 
         private static bool Landed(Hook hook, IntPtr target, byte[] prologue)
@@ -126,16 +121,25 @@ namespace CustomSong
             return false;
         }
 
-        [System.Diagnostics.Conditional("DEBUG")]
         private static void NotLanded(Hook hook)
         {
-#if DEBUG
-            ModLog.Warn($"{Name(hook)} was attached but its first bytes are unchanged; the detour " +
-                             "is not in place, and whatever it answers for will silently do nothing");
-#endif
+            ModLog.WarnRelease($"{Name(hook)} was attached but its first bytes are unchanged; the detour " +
+                               "is not in place, and whatever it answers for will silently do nothing");
         }
 
-#if DEBUG
+        private static readonly System.Collections.Generic.HashSet<string> _alive = new();
+
+        internal static void Alive(string name)
+        {
+            lock (_alive)
+            {
+                if (!_alive.Add(name)) return;
+            }
+
+            ModLog.Load($"{name} is live");
+        }
+
+        internal static void Alive(Hook hook) => Alive(Name(hook));
 
         private static string Name(Hook hook) => hook switch
         {
@@ -162,25 +166,16 @@ namespace CustomSong
             Hook.ResultsUnlock => "DifficultyUnlockContainer._GB",
             Hook.PlayGate => "SongSelectScene._sN",
             Hook.SceneSwitch => "CoreScene._CB.MoveNext",
+            Hook.SelectAwake => "SongSelectScene.Awake",
             _ => "(unknown hook)",
         };
-#endif
 
         private static void Fault(Hook hook, Exception e)
         {
             Faulted = true;
             Faults++;
             if (Faults > 1) return;
-            ModLog.Error($"{Which(hook)}detour faulted, custom charts disabled: {ModLog.Describe(e)}");
-        }
-
-        private static string Which(Hook hook)
-        {
-#if DEBUG
-            return Name(hook) + " ";
-#else
-            return "a ";
-#endif
+            ModLog.Error($"{Name(hook)} detour faulted, custom charts disabled: {ModLog.Describe(e)}");
         }
     }
 }

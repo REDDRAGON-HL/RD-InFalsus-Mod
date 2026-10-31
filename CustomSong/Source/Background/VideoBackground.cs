@@ -69,11 +69,7 @@ namespace CustomSong
             }
             catch (Exception e)
             {
-#if DEBUG
-                reason = $"the background video could not be prepared: {ModLog.Describe(e)}";
-#else
                 _ = e;
-#endif
                 return IntPtr.Zero;
             }
         }
@@ -223,9 +219,6 @@ namespace CustomSong
             if (!Set("set_time", 1, clock, out reason))
             {
                 _lastPlace = now;
-#if DEBUG
-                ModLog.Warn($"the background video could not be placed on the chart clock: {reason}");
-#endif
                 if (!_placeWarned)
                 {
                     _placeWarned = true;
@@ -284,20 +277,6 @@ namespace CustomSong
             return Memory.F64(engine + _clockField);
         }
 
-#if DEBUG
-
-        internal static double Skew
-        {
-            get
-            {
-                if (_player == IntPtr.Zero || _playing == null) return double.NaN;
-                double clock = ChartClock();
-                double at = Time();
-                return double.IsNaN(clock) || at < 0.0 ? double.NaN : at - clock;
-            }
-        }
-#endif
-
         internal static void Hold(double at)
         {
             if (_player == IntPtr.Zero || !_running || _held) return;
@@ -312,17 +291,7 @@ namespace CustomSong
             _heldClock = ChartClock();
             _rewound = false;
             Holds++;
-
-#if DEBUG
-            _songAtHold = at;
-            double held = Time();
-#endif
         }
-
-#if DEBUG
-
-        private static double _songAtHold;
-#endif
 
         internal static void Resume(bool atMusicReturn = false)
         {
@@ -405,9 +374,6 @@ namespace CustomSong
             IntPtr go = Il2CppInterop.Runtime.IL2CPP.il2cpp_object_new(gameObjectClass);
             if (go == IntPtr.Zero)
             {
-#if DEBUG
-                reason = "the background video's object could not be created";
-#endif
                 return false;
             }
 
@@ -420,9 +386,6 @@ namespace CustomSong
             IntPtr type = Il2CppInterop.Runtime.IL2CPP.il2cpp_class_get_type(videoClass);
             if (type == IntPtr.Zero)
             {
-#if DEBUG
-                reason = "the background video's type could not be read";
-#endif
                 return false;
             }
 
@@ -432,27 +395,18 @@ namespace CustomSong
             player = LastResult;
             if (!Memory.LooksLikeObject(player))
             {
-#if DEBUG
-                reason = "the background video's player could not be added";
-#endif
                 return false;
             }
 
             IntPtr klass = Il2CppInterop.Runtime.IL2CPP.il2cpp_object_get_class(player);
             if (!IsVideoPlayer(klass, videoClass))
             {
-#if DEBUG
-                reason = "the component added was not a VideoPlayer";
-#endif
                 return false;
             }
 
             IntPtr texture = Il2CppInterop.Runtime.IL2CPP.il2cpp_object_new(textureClass);
             if (texture == IntPtr.Zero)
             {
-#if DEBUG
-                reason = "the background video's texture could not be created";
-#endif
                 return false;
             }
 
@@ -466,9 +420,6 @@ namespace CustomSong
             int built = WidthOf(texture);
             if (built != TextureWidth)
             {
-#if DEBUG
-                reason = $"the background video's texture reports {built} pixels wide instead of {TextureWidth}";
-#endif
                 return false;
             }
 
@@ -518,9 +469,6 @@ namespace CustomSong
             IntPtr method = Entry(instance, name, parameters);
             if (method == IntPtr.Zero)
             {
-#if DEBUG
-                reason = $"VideoPlayer.{name} could not be found";
-#endif
                 return false;
             }
 
@@ -529,9 +477,6 @@ namespace CustomSong
             LastResult = result;
             if (raised == IntPtr.Zero) return true;
 
-#if DEBUG
-            reason = $"VideoPlayer.{name} raised: {Raised.Text(raised)}";
-#endif
             return false;
         }
 
@@ -565,18 +510,12 @@ namespace CustomSong
 
             if (_player == IntPtr.Zero)
             {
-#if DEBUG
-                reason = "there is no background video player";
-#endif
                 return false;
             }
 
             IntPtr method = Entry(_player, name, 1);
             if (method == IntPtr.Zero)
             {
-#if DEBUG
-                reason = $"VideoPlayer.{name} could not be found";
-#endif
                 return false;
             }
 
@@ -586,9 +525,6 @@ namespace CustomSong
             Il2CppInterop.Runtime.IL2CPP.il2cpp_runtime_invoke(method, _player, (void**)args, ref raised);
             if (raised == IntPtr.Zero) return true;
 
-#if DEBUG
-            reason = $"VideoPlayer.{name} raised: {Raised.Text(raised)}";
-#endif
             return false;
         }
 
@@ -634,9 +570,6 @@ namespace CustomSong
             IntPtr klass = Il2CppInterop.Runtime.IL2CPP.GetIl2CppClass(assembly, namespaze, typeName);
             if (klass == IntPtr.Zero)
             {
-#if DEBUG
-                reason = $"the game's {typeName} type could not be found";
-#endif
                 return IntPtr.Zero;
             }
 
@@ -650,18 +583,12 @@ namespace CustomSong
 
             if (method == IntPtr.Zero)
             {
-#if DEBUG
-                reason = "a background video method could not be found";
-#endif
                 return false;
             }
 
             for (int i = 0; i < count; i++)
             {
                 if (args[i] != IntPtr.Zero) continue;
-#if DEBUG
-                reason = $"argument {i} could not be built, so the call was not made";
-#endif
                 return false;
             }
 
@@ -669,9 +596,6 @@ namespace CustomSong
             LastResult = Il2CppInterop.Runtime.IL2CPP.il2cpp_runtime_invoke(method, instance, (void**)args, ref raised);
             if (raised == IntPtr.Zero) return true;
 
-#if DEBUG
-            reason = $"a call into the game's video types raised: {Raised.Text(raised)}";
-#endif
             return false;
         }
     }

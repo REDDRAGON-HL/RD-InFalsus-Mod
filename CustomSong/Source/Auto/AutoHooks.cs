@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Il2CppInterop.Runtime.InteropTypes;
 
 namespace CustomSong.Auto
 {
@@ -10,15 +11,13 @@ namespace CustomSong.Auto
         internal static int Faults;
         internal static bool Writing => AutoSwitch.On && !Faulted;
         private static bool _asked;
-        private delegate void OzFn(IntPtr self, double time, IntPtr queue, IntPtr methodInfo);
+
         private delegate byte NzFn(IntPtr self, IntPtr noteDict, IntPtr note, byte cursorOnNote,
                                    IntPtr outGrade, IntPtr methodInfo);
         private delegate void OzTimerFn(IntPtr self, double delta, byte inWindow, IntPtr methodInfo);
         private delegate void HbFn(IntPtr lnp, double chartTime, double trackTime, double unitsPerSecond,
                                    IntPtr laneLists, double window);
         private delegate void TrackFn(IntPtr self);
-        private static NativeHook<OzFn> _oz;
-        private static OzFn _ozTramp;
         private static NativeHook<NzFn> _nz;
         private static NzFn _nzTramp;
         private static NativeHook<OzTimerFn> _ozTimer;
@@ -27,8 +26,6 @@ namespace CustomSong.Auto
         private static HbFn _hbTramp;
         private static NativeHook<TrackFn> _trackOnEnable;
         private static TrackFn _trackOnEnableTramp;
-        private static NativeHook<TrackFn> _trackUpdate;
-        private static TrackFn _trackUpdateTramp;
 
         internal static void Install()
         {
@@ -39,15 +36,10 @@ namespace CustomSong.Auto
             int attempted = 0;
             void Count(bool ok) { attempted++; if (ok) installed++; }
 
-            _practice = Installed("InFalsusPractice");
-            if (_practice)
-                ModLog.Load("autoplay: In Falsus Practice is installed; the frame tick rides on " +
-                            "LogicalNotePlayer._hb and Track.Update is left alone");
+            Count(HarmonyHooks.Patch(
+                HarmonyHooks.Target("_VD", "_Oz", "_E"),
+                HarmonyHooks.Handler(typeof(AutoHooks), nameof(OzPrefix))));
 
-            if (!_practice)
-                Count(Attach(ref _oz, "_VD", "_Oz", "_E", 0x5F4620,
-                             (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, double, IntPtr, IntPtr, void>)&OzDetour,
-                             out _ozTramp));
             Count(Attach(ref _nz, "_VD", "_nz", "_E", 0x5F7A90,
                          (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, IntPtr, IntPtr, byte, IntPtr, IntPtr, byte>)&NzDetour,
                          out _nzTramp));
@@ -60,48 +52,22 @@ namespace CustomSong.Auto
             Count(Attach(ref _trackOnEnable, "Track", "OnEnable", "ifapp.Game.Scenes.Game", 0x66EBC0,
                          (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, void>)&TrackOnEnableDetour,
                          out _trackOnEnableTramp));
-            if (!_practice)
-                Count(Attach(ref _trackUpdate, "Track", "Update", "ifapp.Game.Scenes.Game", 0x66EBD0,
-                             (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, void>)&TrackUpdateDetour,
-                             out _trackUpdateTramp));
+
+            Count(HarmonyHooks.Patch(
+                HarmonyHooks.Target("Track", "Update", "ifapp.Game.Scenes.Game"),
+                null,
+                HarmonyHooks.Handler(typeof(AutoHooks), nameof(UpdatePostfix))));
             ModLog.Load($"autoplay: {installed}/{attempted} hooks installed");
             if (installed < attempted)
                 ModLog.Warn("autoplay: a hook is missing; whatever it drives will silently do nothing");
         }
 
-        private static bool Installed(string assembly)
-        {
-            try
-            {
-                foreach (System.Reflection.Assembly loaded in AppDomain.CurrentDomain.GetAssemblies())
-                    if (loaded.GetName().Name == assembly) return true;
-            }
-            catch (Exception e)
-            {
-                ModLog.Warn("autoplay: the loaded plugins could not be listed: " + ModLog.Describe(e));
-            }
-
-            return false;
-        }
-
-        private static bool _practice;
-        private static IntPtr _saidEngine;
-
-        internal static void Tick()
-        {
-            if (!_practice || !Writing) return;
-
-            JudgementPoint.KeepOffAll();
-        }
-
         internal static void Uninstall()
         {
-            _oz?.Detach(); _oz = null; _ozTramp = null;
             _nz?.Detach(); _nz = null; _nzTramp = null;
             _ozTimer?.Detach(); _ozTimer = null; _ozTimerTramp = null;
             _hb?.Detach(); _hb = null; _hbTramp = null;
             _trackOnEnable?.Detach(); _trackOnEnable = null; _trackOnEnableTramp = null;
-            _trackUpdate?.Detach(); _trackUpdate = null; _trackUpdateTramp = null;
             _asked = false;
         }
 
@@ -119,7 +85,12 @@ namespace CustomSong.Auto
             }
             if (target == IntPtr.Zero) return false;
             hook = new NativeHook<T> { Target = target, Detour = detour };
-            hook.Attach();
+            if (!hook.Attach())
+            {
+                hook = null;
+                return false;
+            }
+
             trampoline = hook.Trampoline;
             ModLog.Load($"autoplay: {type}.{method} hooked");
             return true;
@@ -133,26 +104,28 @@ namespace CustomSong.Auto
             ModLog.Error($"autoplay: {where} detour faulted, autoplay disabled: {ModLog.Describe(e)}");
         }
 
-        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-        private static void OzDetour(IntPtr self, double time, IntPtr queue, IntPtr methodInfo)
+        private static void OzPrefix(Il2CppObjectBase __instance, double __0)
         {
+            Hooks.Alive("_VD._Oz");
+            IntPtr self = HarmonyHooks.Pointer(__instance);
+
             try
             {
-                if (!Faulted) AutoSong.Frame(self, time);
-                else AutoSong.LetGo(self, time);
+                if (!Faulted) AutoSong.Frame(self, __0);
+                else AutoSong.LetGo(self, __0);
             }
             catch (Exception e)
             {
                 Fault("_Oz", e);
             }
-
-            _ozTramp(self, time, queue, methodInfo);
         }
 
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static byte NzDetour(IntPtr self, IntPtr noteDict, IntPtr note, byte cursorOnNote,
                                      IntPtr outGrade, IntPtr methodInfo)
         {
+            Hooks.Alive("_VD._nz");
+
             if (Writing)
             {
                 cursorOnNote = 1;
@@ -173,6 +146,7 @@ namespace CustomSong.Auto
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static void OzTimerDetour(IntPtr self, double delta, byte inWindow, IntPtr methodInfo)
         {
+            Hooks.Alive("_VD._oz");
             _ozTimerTramp(self, delta, inWindow, methodInfo);
             if (!Writing) return;
 
@@ -190,28 +164,13 @@ namespace CustomSong.Auto
         private static void HbDetour(IntPtr lnp, double chartTime, double trackTime, double unitsPerSecond,
                                      IntPtr laneLists, double window)
         {
+            Hooks.Alive("LogicalNotePlayer._hb");
+
             if (!Faulted)
             {
                 try
                 {
                     AutoSong.Observe(lnp, chartTime);
-
-                    if (_practice)
-                    {
-                        IntPtr engine = JudgementPoint.AnyEngine();
-                        if (engine != IntPtr.Zero)
-                        {
-                            if (engine != _saidEngine)
-                            {
-                                _saidEngine = engine;
-                                ModLog.Load($"autoplay: the frame tick runs from _hb (engine 0x{engine.ToInt64():X})");
-                            }
-
-                            AutoSong.FrameAt(engine, chartTime * 1000.0, chartTime);
-                        }
-
-                        JudgementPoint.KeepOffAll();
-                    }
                 }
                 catch (Exception e)
                 {
@@ -225,11 +184,11 @@ namespace CustomSong.Auto
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static void TrackOnEnableDetour(IntPtr self)
         {
+            Hooks.Alive("Track.OnEnable");
             _trackOnEnableTramp(self);
 
             try
             {
-                JudgementPoint.NoteTrack(self);
                 JudgementPoint.SuppressAt(self);
             }
             catch (Exception e)
@@ -238,14 +197,13 @@ namespace CustomSong.Auto
             }
         }
 
-        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-        private static void TrackUpdateDetour(IntPtr self)
+        private static void UpdatePostfix(Il2CppObjectBase __instance)
         {
-            _trackUpdateTramp(self);
+            Hooks.Alive("Track.Update");
 
             try
             {
-                JudgementPoint.KeepOff(self);
+                JudgementPoint.KeepOff(HarmonyHooks.Pointer(__instance));
             }
             catch (Exception e)
             {

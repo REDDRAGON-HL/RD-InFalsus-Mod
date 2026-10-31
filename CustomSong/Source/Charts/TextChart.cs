@@ -138,13 +138,56 @@ namespace CustomSong
         internal static bool LooksText(byte[] bytes)
         {
             if (bytes == null) return false;
-            int at = 0;
+            int at = SkipBlank(bytes, 0);
+
+            while (at < bytes.Length && bytes[at] == '#')
+            {
+                while (at < bytes.Length && bytes[at] != '\n') at++;
+                at = SkipBlank(bytes, at);
+            }
+
+            if (at + 6 > bytes.Length) return false;
+            return Encoding.ASCII.GetString(bytes, at, 6) == "chart(";
+        }
+
+        private static int SkipBlank(byte[] bytes, int at)
+        {
             while (at < bytes.Length && (bytes[at] == ' ' || bytes[at] == '\t' || bytes[at] == '\r' ||
                                          bytes[at] == '\n' || bytes[at] == 0xEF || bytes[at] == 0xBB ||
                                          bytes[at] == 0xBF))
                 at++;
-            if (at + 6 > bytes.Length) return false;
-            return Encoding.ASCII.GetString(bytes, at, 6) == "chart(";
+            return at;
+        }
+
+        private static bool LooksPlainText(byte[] bytes)
+        {
+            int limit = Math.Min(bytes.Length, 512);
+            if (limit == 0) return false;
+
+            for (int i = 0; i < limit; i++)
+            {
+                byte b = bytes[i];
+                if (b == 0) return false;
+                if (b == '\t' || b == '\r' || b == '\n') continue;
+                if (b < 0x20) return false;
+            }
+
+            return true;
+        }
+
+        private static string FirstRow(byte[] bytes)
+        {
+            int at = SkipBlank(bytes, 0);
+            int end = at;
+            while (end < bytes.Length && bytes[end] != '\n' && end - at < 80) end++;
+            var text = new StringBuilder();
+            for (int i = at; i < end; i++)
+            {
+                byte b = bytes[i];
+                text.Append(b >= 0x20 && b < 0x7F ? (char)b : '?');
+            }
+
+            return text.Length == 0 ? "(empty)" : text.ToString();
         }
 
         internal static byte[] Encoded(byte[] bytes, string seed, out string reason)
@@ -152,7 +195,13 @@ namespace CustomSong
             reason = null;
             string text = Encoding.UTF8.GetString(bytes);
             bool json = LooksJson(bytes);
-            if (!json && !LooksText(bytes)) return bytes;
+            if (!json && !LooksText(bytes))
+            {
+                if (LooksPlainText(bytes))
+                    ModLog.WarnRelease($"chart '{seed}' is text but not a chart this loader reads " +
+                                       $"(first row: '{FirstRow(bytes)}'); it is passed to the game as it is");
+                return bytes;
+            }
 
             bool parsed = json ? TryParseJson(text, out TextChart chart, out reason)
                                : TryParse(text, out chart, out reason);
@@ -439,7 +488,6 @@ namespace CustomSong
         {
             foreach (Event e in Events)
                 if (e.Type == 0) return;
-
             Events.Insert(0, new Event { Type = 0, TimeMs = 0, Number = 1.0, HasNumber = true });
         }
 

@@ -42,26 +42,20 @@ namespace CustomSong
         {
             private readonly byte[] _data;
             private int _at;
-
             internal Reader(byte[] data) => _data = data;
-
             private int _width, _height;
             private int _maxH = 1, _maxV = 1;
             private int _restartInterval;
             private bool _progressive;
             private bool _rgb;
-
             private Component[] _parts = Array.Empty<Component>();
             private Component _alone;
-
             private readonly int[][] _quant = new int[4][];
             private readonly Huffman[] _dcTables = new Huffman[4];
             private readonly Huffman[] _acTables = new Huffman[4];
-
             private bool _done;
             private string _failure;
             private int _blocks;
-
             private int _bits;
             private uint _buffer;
 
@@ -86,7 +80,6 @@ namespace CustomSong
                         case 0xD0: case 0xD1: case 0xD2: case 0xD3:
                         case 0xD4: case 0xD5: case 0xD6: case 0xD7:
                             break;
-
                         case 0xDB: ReadQuantisation(); break;
                         case 0xC4: ReadHuffman(); break;
                         case 0xC0: case 0xC1: ReadFrame(false); break;
@@ -94,13 +87,11 @@ namespace CustomSong
                         case 0xDD: _restartInterval = ReadU16(); break;
                         case 0xEE: ReadAdobe(); break;
                         case 0xDA: ReadScan(); break;
-
                         case 0xC3: case 0xC5: case 0xC6: case 0xC7:
                         case 0xC9: case 0xCA: case 0xCB: case 0xCD:
                         case 0xCE: case 0xCF:
                             reason = "lossless and arithmetic-coded JPEGs are not supported";
                             return null;
-
                         default: SkipSegment(); break;
                     }
 
@@ -117,8 +108,7 @@ namespace CustomSong
                     return null;
                 }
 
-                return Compose(out reason);
-            }
+                return Compose(out reason);            }
 
             private int NextMarker()
             {
@@ -127,7 +117,6 @@ namespace CustomSong
                     if (_data[_at] != 0xFF) { _at++; continue; }
 
                     while (_at + 1 < _data.Length && _data[_at + 1] == 0xFF) _at++;
-
                     int marker = _data[_at + 1];
                     _at += 2;
                     return marker;
@@ -167,7 +156,6 @@ namespace CustomSong
                         values[ZigZag[i]] = precision == 0
                             ? _data[_at + i]
                             : (_data[_at + i * 2] << 8) | _data[_at + i * 2 + 1];
-
                     _at += precision == 0 ? 64 : 128;
                     _quant[table] = values;
                 }
@@ -198,7 +186,6 @@ namespace CustomSong
 
                     huffman.Symbols = new int[total];
                     for (int i = 0; i < total; i++) huffman.Symbols[i] = _data[_at++];
-
                     if (ac) _acTables[table] = huffman;
                     else _dcTables[table] = huffman;
                 }
@@ -209,7 +196,6 @@ namespace CustomSong
                 int length = ReadU16();
                 int end = _at + length - 2;
                 _progressive = progressive;
-
                 int precision = _data[_at++];
                 if (precision != 8)
                 {
@@ -242,7 +228,6 @@ namespace CustomSong
                         V = _data[_at + 1] & 15,
                         Tq = _data[_at + 2],
                     };
-
                     _at += 3;
 
                     if (part.H < 1 || part.H > 4 || part.V < 1 || part.V > 4)
@@ -286,7 +271,6 @@ namespace CustomSong
                 int length = ReadU16();
                 int end = _at + length - 2;
                 int count = _data[_at++];
-
                 var scan = new Component[count];
 
                 for (int i = 0; i < count; i++)
@@ -294,7 +278,6 @@ namespace CustomSong
                     int id = _data[_at];
                     int tables = _data[_at + 1];
                     _at += 2;
-
                     Component part = null;
                     foreach (Component candidate in _parts)
                         if (candidate.Id == id) { part = candidate; break; }
@@ -330,9 +313,7 @@ namespace CustomSong
                 _at = end;
                 _alone = count == 1 ? scan[0] : null;
                 _bits = 0;
-
                 foreach (Component part in scan) part.DcPredictor = 0;
-
                 DecodeScan(scan, startBand, endBand, high, low);
             }
 
@@ -370,7 +351,6 @@ namespace CustomSong
                                         int bx = mx * part.H + h;
                                         int by = my * part.V + v;
                                         if (bx >= part.BlocksX || by >= part.BlocksY) continue;
-
                                         DecodeBlock(part, bx, by, startBand, endBand, high, low, ref eobRun);
                                     }
                             }
@@ -382,7 +362,6 @@ namespace CustomSong
                         {
                             eobRun = 0;
                             _bits = 0;
-
                             int marker = NextMarker();
                             if (marker < 0xD0 || marker > 0xD7)
                             {
@@ -463,9 +442,9 @@ namespace CustomSong
 
                 for (int k = startBand; k <= endBand; k++)
                 {
-                    int ac = HuffmanDecode(_acTables[part.AcTable]);
-                    int run = ac >> 4;
-                    int size = ac & 15;
+                    int symbol = HuffmanDecode(_acTables[part.AcTable]);
+                    int run = symbol >> 4;
+                    int size = symbol & 15;
 
                     if (size == 0)
                     {
@@ -502,9 +481,9 @@ namespace CustomSong
 
                 while (k <= endBand)
                 {
-                    int ac = HuffmanDecode(_acTables[part.AcTable]);
-                    int run = ac >> 4;
-                    int size = ac & 15;
+                    int symbol = HuffmanDecode(_acTables[part.AcTable]);
+                    int run = symbol >> 4;
+                    int size = symbol & 15;
                     int value = 0;
 
                     if (size == 0)
@@ -544,7 +523,6 @@ namespace CustomSong
                     }
 
                     if (k > endBand) break;
-
                     coefficients[offset + ZigZag[k]] = value;
                     k++;
                 }
@@ -568,11 +546,9 @@ namespace CustomSong
             private void RefineOne(int[] coefficients, int at, int step)
             {
                 if (GetBit() == 0) return;
-
                 int value = coefficients[at];
                 int magnitude = value < 0 ? -value : value;
                 if ((magnitude & step) != 0) return;
-
                 coefficients[at] = value > 0 ? value + step : value - step;
             }
 
@@ -599,13 +575,13 @@ namespace CustomSong
             private int NextByte()
             {
                 if (_at >= _data.Length) return -1;
-
                 int value = _data[_at];
 
                 if (value == 0xFF)
                 {
                     int next = _at + 1 < _data.Length ? _data[_at + 1] : 0;
                     if (next == 0x00) { _at += 2; return 0xFF; }
+
                     return -1;
                 }
 
@@ -629,9 +605,7 @@ namespace CustomSong
                 {
                     code |= GetBit();
                     int count = table.Counts[length];
-
                     if (code - first < count) return table.Symbols[index + (code - first)];
-
                     index += count;
                     first = (first + count) << 1;
                     code <<= 1;
@@ -647,13 +621,10 @@ namespace CustomSong
             private Png.Image Compose(out string reason)
             {
                 reason = null;
-
                 foreach (Component part in _parts) Reconstruct(part);
-
                 int width = _width;
                 int height = _height;
                 var rgba = new byte[width * height * 4];
-
                 bool three = _parts.Length >= 3;
                 Component luma = _parts[0];
                 Component blue = three ? _parts[1] : null;
@@ -686,7 +657,6 @@ namespace CustomSong
                         {
                             int cb = b - 128;
                             int cr = r - 128;
-
                             rgba[at] = Clamp(y + 1.402 * cr);
                             rgba[at + 1] = Clamp(y - 0.344136 * cb - 0.714136 * cr);
                             rgba[at + 2] = Clamp(y + 1.772 * cb);
@@ -717,26 +687,21 @@ namespace CustomSong
 
                 double fx = (x + 0.5) * part.H / _maxH - 0.5;
                 double fy = (y + 0.5) * part.V / _maxV - 0.5;
-
                 int x0 = (int)Math.Floor(fx);
                 int y0 = (int)Math.Floor(fy);
                 double wx = fx - x0;
                 double wy = fy - y0;
-
                 int x1 = ClampIndex(x0 + 1, width);
                 int y1 = ClampIndex(y0 + 1, height);
                 x0 = ClampIndex(x0, width);
                 y0 = ClampIndex(y0, height);
-
                 double top = part.Samples[y0 * stride + x0] * (1 - wx) + part.Samples[y0 * stride + x1] * wx;
                 double bottom = part.Samples[y1 * stride + x0] * (1 - wx) + part.Samples[y1 * stride + x1] * wx;
-
                 return (byte)(top * (1 - wy) + bottom * wy + 0.5);
             }
 
             private static int ClampIndex(int value, int limit) =>
                 value < 0 ? 0 : value >= limit ? limit - 1 : value;
-
             private static readonly double[][] Basis = BuildBasis();
 
             private static double[][] BuildBasis()
@@ -759,7 +724,6 @@ namespace CustomSong
             {
                 int stride = part.BlocksX * 8;
                 int[] quant = _quant[part.Tq] ?? _quant[0];
-
                 var block = new double[64];
                 var pass = new double[64];
 
@@ -789,7 +753,6 @@ namespace CustomSong
                             {
                                 double sum = 0;
                                 for (int v = 0; v < 8; v++) sum += Basis[v][u] * pass[v * 8 + column];
-
                                 int value = (int)(sum + 128.5);
                                 part.Samples[(by * 8 + u) * stride + bx * 8 + column] =
                                     (byte)(value < 0 ? 0 : value > 255 ? 255 : value);
