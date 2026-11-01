@@ -7,11 +7,13 @@ namespace CustomSong
         internal const int Difficulties = 4;
         internal string Folder;
         internal string Name;
-        internal string[] Names;
         internal string[] Titles;
+        internal string[][] TitleSets;
         internal string Composer;
-        internal string[] Composers;
-        internal string[] Illustrators;
+        internal string[] ComposerLanguages;
+        internal string[][] ComposerSets;
+        internal string[] IllustratorLanguages;
+        internal string[][] IllustratorSets;
         internal string SongPath;
         internal string[] Songs;
         internal string[] JacketPaths;

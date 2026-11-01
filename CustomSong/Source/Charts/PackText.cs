@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
+using System.Reflection;
 
 namespace CustomSong
 {
@@ -101,8 +103,7 @@ namespace CustomSong
         private static readonly Dictionary<string, IntPtr> Built =
             new Dictionary<string, IntPtr>(StringComparer.Ordinal);
 
-        internal static int SetPackVisuals(IntPtr packAssets, int packId, string folder,
-                                          Dictionary<string, string> overrides)
+        internal static int SetPackVisuals(IntPtr packAssets, int packId, ChartPack pack)
         {
             IntPtr table = Memory.Ptr(packAssets + PackAssetsTable);
             if (!Memory.LooksLikeObject(table)) return 0;
@@ -112,13 +113,14 @@ namespace CustomSong
             int stride = count > 0 ? (int)(bytes / count) : 0;
             if (stride <= 0) return 0;
             IntPtr row = table + Offsets.Runtime.ArrayDataOffset + packId * stride;
+            int language = Language();
             int applied = 0;
             int slot = 0;
 
             for (int index = 0; index < VisualSet.Length; index++, slot++)
             {
                 (string field, string key, string file) = VisualSet[index];
-                string path = Picture(folder, overrides, key, file);
+                string path = Picture(pack, key, file, language);
                 int offset = FieldResolver.Lookup("SongSelectPackAssets", field);
                 if (offset < 0) continue;
 
@@ -136,7 +138,7 @@ namespace CustomSong
                     continue;
                 }
 
-                string materialKey = packId + "|" + key;
+                string materialKey = packId + "|" + path;
                 if (!Built.TryGetValue(materialKey, out IntPtr material))
                 {
                     material = JacketFactory.Cover(path, source, out string reason);
@@ -160,19 +162,89 @@ namespace CustomSong
 
         internal static void ResetVisualCache() => Built.Clear();
 
-        private static string Picture(string folder, Dictionary<string, string> overrides,
-                                      string key, string file)
+        internal static int Language()
         {
-            if (overrides != null && overrides.TryGetValue(key, out string custom) &&
-                File.Exists(custom))
-                return custom;
-            string path = Path.Combine(folder, file);
+            if (_language != int.MinValue) return _language;
+            _language = ReadLanguage();
+            return _language;
+        }
+
+        private static int _language = int.MinValue;
+        private const int FallbackLanguage = ChartPack.FallbackLanguage;
+
+        private static int ReadLanguage()
+        {
+            try
+            {
+                MethodInfo method = MethodResolver.ManagedMethod("Strings", "GetCurrentLocalization", "Str");
+                if (method == null)
+                {
+                    ModLog.WarnRelease("the game's current language could not be found; pack pictures " +
+                                       "use their English slot");
+                    return FallbackLanguage;
+                }
+
+                object value = method.Invoke(null, null);
+                int code = Convert.ToInt32(value, CultureInfo.InvariantCulture);
+                string name = method.ReturnType.IsEnum ? Enum.GetName(method.ReturnType, code) : null;
+                int slot = SlotOf(name);
+                ModLog.Load($"pack pictures: the game is showing {name ?? code.ToString()} " +
+                            $"(language slot {slot})");
+                return slot;
+            }
+            catch (Exception e)
+            {
+                ModLog.WarnRelease("the game's current language could not be read: " + ModLog.Describe(e));
+                return FallbackLanguage;
+            }
+        }
+
+        private static int SlotOf(string name)
+        {
+            if (name == null) return FallbackLanguage;
+
+            if (name.IndexOf("Simplified", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                name.EndsWith("SC", StringComparison.Ordinal)) return 0;
+            if (name.IndexOf("Traditional", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                name.EndsWith("TC", StringComparison.Ordinal)) return 1;
+            if (name.IndexOf("Japanese", StringComparison.OrdinalIgnoreCase) >= 0) return 3;
+            if (name.IndexOf("Korean", StringComparison.OrdinalIgnoreCase) >= 0) return 4;
+            return FallbackLanguage;
+        }
+
+        internal static bool Install()
+        {
+            MethodInfo setter = HarmonyHooks.Target("Strings", "SetDefaultLocalization", "Str");
+            if (setter == null)
+            {
+                ModLog.WarnRelease("the game's language setting could not be watched; changing it " +
+                                   "needs a restart for the pack pictures");
+                return false;
+            }
+
+            bool patched = HarmonyHooks.Patch(setter, null,
+                HarmonyHooks.Handler(typeof(PackText), nameof(AfterLanguage)));
+            if (patched) ModLog.Load("pack pictures follow the game's language");
+            return patched;
+        }
+
+        private static void AfterLanguage()
+        {
+            _language = int.MinValue;
+            CustomSongCore.InvalidateVisualTables();
+        }
+
+        private static string Picture(ChartPack pack, string key, string file, int language)
+        {
+            string custom = pack.Visual(key, language);
+            if (custom != null && File.Exists(custom)) return custom;
+            string path = Path.Combine(pack.Folder, file);
             if (File.Exists(path)) return path;
 
             string other = file.Contains("-hover")
                 ? file.Replace("-hover", "-default")
                 : file.Replace("-default", "-hover");
-            path = Path.Combine(folder, other);
+            path = Path.Combine(pack.Folder, other);
             return File.Exists(path) ? path : null;
         }
 

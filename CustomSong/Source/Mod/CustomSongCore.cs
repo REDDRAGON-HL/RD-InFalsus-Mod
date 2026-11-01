@@ -110,6 +110,7 @@ namespace CustomSong
             AutoRowHooks.Install();
             Auto.AutoHooks.Install();
             Auto.AutoResults.Install();
+            PackText.Install();
         }
 
         private static bool _hooksInstalled;
@@ -237,7 +238,7 @@ namespace CustomSong
             {
                 if (pack.Names != null) PackText.SetPackName(pack.PackId, pack.Names);
                 else PackText.SetPackName(pack.PackId, pack.Name);
-                int applied = PackText.SetPackVisuals(assets, pack.PackId, pack.Folder, pack.Visuals);
+                int applied = PackText.SetPackVisuals(assets, pack.PackId, pack);
 
                 ModLog.Load($"pack '{pack.Name}' id={pack.PackId} " +
                             $"table=0x{assets.ToInt64():X} visuals={applied} " +
@@ -249,6 +250,7 @@ namespace CustomSong
         }
 
         private static readonly List<IntPtr> _visualTables = new List<IntPtr>();
+        internal static void InvalidateVisualTables() => _visualTables.Clear();
         internal static void Shutdown() => Hooks.Uninstall();
 
         private static int RegisterAudio(List<ChartPack> packs)

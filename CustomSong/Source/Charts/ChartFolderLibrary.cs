@@ -218,25 +218,12 @@ namespace CustomSong
                             {
                                 pack.Name = title.GetString().Trim();
                             }
-                            else if (title.ValueKind == JsonValueKind.Array &&
-                                     title.GetArrayLength() == 5)
+                            else if (title.ValueKind == JsonValueKind.Array ||
+                                     title.ValueKind == JsonValueKind.Object)
                             {
-                                var names = new string[5];
-                                bool okay = true;
+                                string[] names = Titles(title);
 
-                                for (int i = 0; i < names.Length; i++)
-                                {
-                                    JsonElement entry = title[i];
-                                    if (entry.ValueKind != JsonValueKind.String ||
-                                        string.IsNullOrWhiteSpace(entry.GetString()))
-                                    {
-                                        okay = false;
-                                        break;
-                                    }
-                                    names[i] = entry.GetString();
-                                }
-
-                                if (okay)
+                                if (names != null)
                                 {
                                     pack.Names = names;
                                     pack.Name = names[0];
@@ -261,11 +248,12 @@ namespace CustomSong
                                     continue;
                                 }
 
-                                if (entry.Value.ValueKind != JsonValueKind.String) continue;
-                                string path = LocalPicture(folder, entry.Value.GetString());
-                                if (path != null) pack.Visuals[entry.Name] = path;
-                                else ModLog.Warn($"pack.json in '{name}': '{entry.Name}' points at " +
-                                                 $"'{entry.Value.GetString()}', which is not a picture in the pack");
+                                if (entry.Value.ValueKind != JsonValueKind.String &&
+                                    entry.Value.ValueKind != JsonValueKind.Array &&
+                                    entry.Value.ValueKind != JsonValueKind.Object)
+                                    continue;
+                                string[] slots = Pictures(folder, name, entry.Name, entry.Value);
+                                if (slots != null) pack.Visuals[entry.Name] = slots;
                             }
                         }
                     }
@@ -277,6 +265,151 @@ namespace CustomSong
             }
 
             return pack;
+        }
+
+        private static string[] Pictures(string folder, string packName, string key, JsonElement value)
+        {
+            var slots = new string[ChartPack.Languages];
+
+            if (value.ValueKind == JsonValueKind.String)
+            {
+                string path = LocalPicture(folder, value.GetString());
+                if (path == null)
+                {
+                    ModLog.Warn($"pack.json in '{packName}': '{key}' points at '{value.GetString()}', " +
+                                "which is not a picture in the pack");
+                    return null;
+                }
+
+                for (int i = 0; i < slots.Length; i++) slots[i] = path;
+                return slots;
+            }
+
+            if (value.ValueKind == JsonValueKind.Object) return NamedPictures(folder, packName, key, value);
+
+            if (value.GetArrayLength() != ChartPack.Languages)
+            {
+                ModLog.Warn($"pack.json in '{packName}': '{key}' must be a picture or " +
+                            $"{ChartPack.Languages} of them, one per language; it is ignored");
+                return null;
+            }
+
+            bool any = false;
+            for (int i = 0; i < slots.Length; i++)
+            {
+                JsonElement item = value[i];
+                if (item.ValueKind == JsonValueKind.Null) continue;
+
+                if (item.ValueKind != JsonValueKind.String)
+                {
+                    ModLog.Warn($"pack.json in '{packName}': '{key}'[{i}] is not a picture name; " +
+                                "it is ignored");
+                    return null;
+                }
+
+                slots[i] = LocalPicture(folder, item.GetString());
+                if (slots[i] == null)
+                {
+                    ModLog.Warn($"pack.json in '{packName}': '{key}'[{i}] points at " +
+                                $"'{item.GetString()}', which is not a picture in the pack");
+                    continue;
+                }
+
+                any = true;
+            }
+
+            if (!any)
+            {
+                ModLog.Warn($"pack.json in '{packName}': '{key}' names no picture that is in the pack");
+                return null;
+            }
+
+            return slots;
+        }
+
+        private static string[] NamedPictures(string folder, string packName, string key, JsonElement value)
+        {
+            var slots = new string[ChartPack.Languages];
+            bool any = false;
+
+            foreach (JsonProperty entry in value.EnumerateObject())
+            {
+                int language = ChartPack.LanguageIndex(entry.Name);
+                if (language < 0)
+                {
+                    ModLog.Warn($"pack.json in '{packName}': '{key}.{entry.Name}' is not a language " +
+                                "(sc/tc/en/ja/ko); it is ignored");
+                    continue;
+                }
+
+                if (entry.Value.ValueKind != JsonValueKind.String) continue;
+                slots[language] = LocalPicture(folder, entry.Value.GetString());
+                if (slots[language] == null)
+                {
+                    ModLog.Warn($"pack.json in '{packName}': '{key}.{entry.Name}' points at " +
+                                $"'{entry.Value.GetString()}', which is not a picture in the pack");
+                    continue;
+                }
+
+                any = true;
+            }
+
+            if (!any)
+            {
+                ModLog.Warn($"pack.json in '{packName}': '{key}' names no picture that is in the pack");
+                return null;
+            }
+
+            return slots;
+        }
+
+        private static string[] Titles(JsonElement value)
+        {
+            var slots = new string[ChartPack.Languages];
+
+            if (value.ValueKind == JsonValueKind.Array)
+            {
+                if (value.GetArrayLength() != ChartPack.Languages) return null;
+
+                for (int i = 0; i < slots.Length; i++)
+                {
+                    JsonElement entry = value[i];
+                    if (entry.ValueKind != JsonValueKind.String ||
+                        string.IsNullOrWhiteSpace(entry.GetString())) return null;
+                    slots[i] = entry.GetString();
+                }
+
+                return slots;
+            }
+
+            foreach (JsonProperty entry in value.EnumerateObject())
+            {
+                int language = ChartPack.LanguageIndex(entry.Name);
+                if (language < 0)
+                {
+                    ModLog.Warn($"pack.json: 'name.{entry.Name}' is not a language " +
+                                "(sc/tc/en/ja/ko); it is ignored");
+                    continue;
+                }
+
+                if (entry.Value.ValueKind != JsonValueKind.String ||
+                    string.IsNullOrWhiteSpace(entry.Value.GetString())) return null;
+                slots[language] = entry.Value.GetString();
+            }
+
+            string first = null;
+            foreach (string text in slots)
+                if (text != null)
+                {
+                    first = text;
+                    break;
+                }
+
+            if (first == null) return null;
+
+            for (int i = 0; i < slots.Length; i++)
+                if (slots[i] == null) slots[i] = first;
+            return slots;
         }
 
         private static string LocalPicture(string folder, string name)

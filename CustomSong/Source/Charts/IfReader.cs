@@ -69,21 +69,15 @@ namespace CustomSong
             var built = new ChartInfo { Folder = folder, FolderName = folderName };
             if (!Text(root, "id", out string id, out reason)) return false;
             built.BaseName = id;
+            if (!Faces(root, "name", true, out built.Titles, out built.TitleSets, out reason)) return false;
+            built.Name = built.Titles[0];
 
-            if (LanguageNames(root, out built.Titles))
-            {
-                built.Name = built.Titles[0];
-            }
-            else
-            {
-                if (!Names(root, out built.Names, out reason)) return false;
-                built.Name = built.Names[0];
-                built.Titles = SameFive(built.Name);
-            }
+            if (!Faces(root, "composer", true, out built.ComposerLanguages, out built.ComposerSets, out reason))
+                return false;
+            built.Composer = built.ComposerLanguages[0];
 
-            if (!Composers(root, out built.Composers, out reason)) return false;
-            built.Composer = built.Composers[0];
-            if (!Illustrators(root, out built.Illustrators, out reason)) return false;
+            if (!Faces(root, "illust", false, out built.IllustratorLanguages, out built.IllustratorSets, out reason))
+                return false;
             if (!Songs(root, folder, out built.Songs, out reason)) return false;
             built.SongPath = built.Songs[0];
             if (!Jackets(root, folder, out built.JacketPaths, out reason)) return false;
@@ -106,27 +100,266 @@ namespace CustomSong
             return true;
         }
 
-        private static bool LanguageNames(JsonElement root, out string[] titles)
+        private static bool Faces(JsonElement root, string key, bool required,
+                                  out string[] languages, out string[][] sets, out string reason)
         {
-            titles = null;
-            if (!root.TryGetProperty("name", out JsonElement token)) return false;
-            if (token.ValueKind != JsonValueKind.Array) return false;
-            if (token.GetArrayLength() != 5) return false;
-            var values = new string[5];
-            for (int i = 0; i < values.Length; i++)
+            languages = null;
+            sets = null;
+            reason = null;
+
+            if (!root.TryGetProperty(key, out JsonElement token) || token.ValueKind == JsonValueKind.Null)
             {
-                JsonElement entry = token[i];
-                if (entry.ValueKind != JsonValueKind.String) return false;
-                string text = entry.GetString();
-                if (string.IsNullOrWhiteSpace(text)) return false;
-                values[i] = text;
+                if (!required) return true;
+                return false;
             }
 
-            titles = values;
+            if (token.ValueKind == JsonValueKind.String)
+            {
+                if (!One(token, key, out string text, out reason)) return false;
+                languages = SameFive(text);
+                return true;
+            }
+
+            if (token.ValueKind == JsonValueKind.Object)
+                return Dictionary(token, key, required, out languages, out sets, out reason);
+
+            if (token.ValueKind != JsonValueKind.Array)
+            {
+                return false;
+            }
+
+            int count = token.GetArrayLength();
+
+            if (count == ChartPack.Languages)
+            {
+                if (!Nested(token, key, out sets, out reason)) return false;
+                if (sets == null) return Five(token, key, required, out languages, out reason);
+                languages = Base(null, sets, required, out reason);
+                if (languages == null) return !required;
+                Fill(sets, languages);
+                return true;
+            }
+
+            if (count != ChartInfo.Difficulties)
+            {
+                return false;
+            }
+
+            var perDifficulty = new string[ChartInfo.Difficulties][];
+            bool any = false;
+
+            for (int i = 0; i < ChartInfo.Difficulties; i++)
+            {
+                JsonElement item = token[i];
+                if (item.ValueKind == JsonValueKind.Null) continue;
+
+                if (item.ValueKind == JsonValueKind.Array)
+                {
+                    return false;
+                }
+
+                if (!One(item, key, out string text, out reason)) return false;
+                perDifficulty[i] = SameFive(text);
+                any = true;
+            }
+
+            if (!any) return !required;
+            languages = Base(null, perDifficulty, required, out reason);
+            if (languages == null) return false;
+            sets = perDifficulty;
             return true;
         }
 
-        private static string[] SameFive(string text) => new[] { text, text, text, text, text };
+        private static bool Dictionary(JsonElement token, string key, bool required,
+                                       out string[] languages, out string[][] sets, out string reason)
+        {
+            languages = null;
+            sets = null;
+            reason = null;
+            var slots = new string[ChartPack.Languages];
+            var perDifficulty = new string[ChartInfo.Difficulties][];
+            bool anyText = false;
+            bool anySet = false;
+
+            foreach (JsonProperty entry in token.EnumerateObject())
+            {
+                int language = ChartPack.LanguageIndex(entry.Name);
+                if (language < 0)
+                {
+                    ModLog.WarnRelease($"\"{key}\": '{entry.Name}' is not a language " +
+                                       "(sc/tc/en/ja/ko); it is ignored");
+                    continue;
+                }
+
+                JsonElement value = entry.Value;
+
+                if (value.ValueKind == JsonValueKind.String)
+                {
+                    if (!One(value, key, out string text, out reason)) return false;
+                    slots[language] = text;
+                    anyText = true;
+                    continue;
+                }
+
+                if (value.ValueKind != JsonValueKind.Array ||
+                    value.GetArrayLength() != ChartInfo.Difficulties)
+                {
+                    return false;
+                }
+
+                for (int d = 0; d < ChartInfo.Difficulties; d++)
+                {
+                    JsonElement item = value[d];
+                    if (item.ValueKind == JsonValueKind.Null) continue;
+                    if (!One(item, key, out string text, out reason)) return false;
+                    perDifficulty[d] ??= new string[ChartPack.Languages];
+                    perDifficulty[d][language] = text;
+                    anySet = true;
+                }
+            }
+
+            if (!anyText && !anySet) return !required;
+            string[] baseSlots = anyText ? slots : null;
+            languages = Base(baseSlots, anySet ? perDifficulty : null, required, out reason);
+            if (languages == null) return !required;
+
+            if (anySet)
+            {
+                Fill(perDifficulty, languages);
+                sets = perDifficulty;
+            }
+
+            return true;
+        }
+
+        private static bool Nested(JsonElement token, string key, out string[][] sets, out string reason)
+        {
+            sets = null;
+            reason = null;
+
+            for (int language = 0; language < ChartPack.Languages; language++)
+            {
+                JsonElement row = token[language];
+                if (row.ValueKind != JsonValueKind.Array) return true;
+
+                if (row.GetArrayLength() != ChartInfo.Difficulties)
+                {
+                    return false;
+                }
+            }
+
+            var perDifficulty = new string[ChartInfo.Difficulties][];
+            for (int difficulty = 0; difficulty < ChartInfo.Difficulties; difficulty++)
+                perDifficulty[difficulty] = new string[ChartPack.Languages];
+
+            for (int language = 0; language < ChartPack.Languages; language++)
+            {
+                JsonElement row = token[language];
+
+                for (int difficulty = 0; difficulty < ChartInfo.Difficulties; difficulty++)
+                {
+                    JsonElement item = row[difficulty];
+                    if (item.ValueKind == JsonValueKind.Null) continue;
+                    if (!One(item, key, out string text, out reason)) return false;
+                    perDifficulty[difficulty][language] = text;
+                }
+            }
+
+            sets = perDifficulty;
+            return true;
+        }
+
+        private static string[] Base(string[] slots, string[][] sets, bool required, out string reason)
+        {
+            reason = null;
+            var languages = new string[ChartPack.Languages];
+            bool any = false;
+
+            for (int language = 0; language < languages.Length; language++)
+            {
+                if (slots != null && slots[language] != null)
+                {
+                    languages[language] = slots[language];
+                    any = true;
+                    continue;
+                }
+
+                if (sets == null) continue;
+
+                foreach (string[] set in sets)
+                {
+                    if (set == null || set[language] == null) continue;
+                    languages[language] = set[language];
+                    any = true;
+                    break;
+                }
+            }
+
+            if (!any)
+            {
+                if (required)
+                {
+                }
+
+                return null;
+            }
+
+            string first = null;
+            foreach (string text in languages)
+                if (text != null)
+                {
+                    first = text;
+                    break;
+                }
+
+            for (int language = 0; language < languages.Length; language++)
+                if (languages[language] == null) languages[language] = first;
+            return languages;
+        }
+
+        private static void Fill(string[][] sets, string[] languages)
+        {
+            foreach (string[] set in sets)
+            {
+                if (set == null) continue;
+
+                for (int language = 0; language < set.Length; language++)
+                    if (set[language] == null) set[language] = languages[language];
+            }
+        }
+
+        private static bool Five(JsonElement token, string key, bool required,
+                                 out string[] values, out string reason)
+        {
+            values = null;
+            reason = null;
+            var slots = new string[ChartPack.Languages];
+            for (int i = 0; i < slots.Length; i++)
+            {
+                JsonElement entry = token[i];
+                if (entry.ValueKind == JsonValueKind.Null && !required) continue;
+                if (!One(entry, key, out slots[i], out reason)) return false;
+            }
+
+            values = slots;
+            return true;
+        }
+
+        private static bool One(JsonElement item, string key, out string text, out string reason)
+        {
+            text = null;
+            reason = null;
+
+            if (item.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(item.GetString()))
+            {
+                return false;
+            }
+
+            text = item.GetString();
+            return true;
+        }
+
+        internal static string[] SameFive(string text) => new[] { text, text, text, text, text };
 
         internal static string WhyNot(string folder)
         {
@@ -143,31 +376,6 @@ namespace CustomSong
             }
 
             return $"its {InfoFileName} was read but turned down; install the Debug build for the reason";
-        }
-
-        private static bool Composers(JsonElement root, out string[] composers, out string reason)
-        {
-            composers = null;
-            reason = null;
-
-            if (!root.TryGetProperty("composer", out JsonElement token) || token.ValueKind == JsonValueKind.Null)
-            {
-                return false;
-            }
-
-            if (token.ValueKind == JsonValueKind.String)
-            {
-                string one = token.GetString();
-                if (string.IsNullOrWhiteSpace(one))
-                {
-                    return false;
-                }
-
-                composers = Same(one);
-                return true;
-            }
-
-            return Texts(root, "composer", out composers, out reason);
         }
 
         private static bool Text(JsonElement root, string key, out string value, out string reason)
@@ -289,59 +497,6 @@ namespace CustomSong
             }
 
             paths = result;
-            return true;
-        }
-
-        private static bool Illustrators(JsonElement root, out string[] names, out string reason)
-        {
-            names = null;
-            reason = null;
-
-            if (!root.TryGetProperty("illust", out JsonElement token) ||
-                token.ValueKind == JsonValueKind.Null) return true;
-
-            if (token.ValueKind == JsonValueKind.String)
-            {
-                string single = token.GetString();
-                if (string.IsNullOrWhiteSpace(single))
-                {
-                    return false;
-                }
-
-                names = new string[ChartInfo.Difficulties];
-                for (int i = 0; i < names.Length; i++) names[i] = single;
-                return true;
-            }
-
-            if (token.ValueKind != JsonValueKind.Array)
-            {
-                return false;
-            }
-
-            int count = token.GetArrayLength();
-            if (count != ChartInfo.Difficulties)
-            {
-                return false;
-            }
-
-            var result = new string[ChartInfo.Difficulties];
-            for (int i = 0; i < result.Length; i++)
-            {
-                JsonElement item = token[i];
-                if (item.ValueKind == JsonValueKind.Null)
-                {
-                    result[i] = string.Empty;
-                    continue;
-                }
-
-                if (item.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(item.GetString()))
-                {
-                    return false;
-                }
-                result[i] = item.GetString();
-            }
-
-            names = result;
             return true;
         }
 

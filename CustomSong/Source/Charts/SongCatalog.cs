@@ -363,8 +363,8 @@ namespace CustomSong
                 {
                     int id = oldCount + running++;
                     PackText.SetSongText(PackText.SongText.Title, id, chart.Titles);
-                    PackText.SetSongText(PackText.SongText.Artist, id, chart.Composer);
-                    PackText.SetSongText(PackText.SongText.Illustrator, id, IllustratorOf(chart, 0));
+                    PackText.SetSongText(PackText.SongText.Artist, id, chart.ComposerLanguages);
+                    PackText.SetSongText(PackText.SongText.Illustrator, id, Illustrators(chart, 0));
                 }
             }
 
@@ -420,16 +420,15 @@ namespace CustomSong
             return true;
         }
 
-        private static string IllustratorOf(ChartInfo info, int difficulty) =>
-            info.Illustrators == null ? string.Empty : info.Illustrators[difficulty];
+        private static string[] Illustrators(ChartInfo info, int difficulty) =>
+            info.IllustratorSets?[difficulty] ?? info.IllustratorLanguages ?? IfReader.SameFive(string.Empty);
 
         private static bool VariesByDifficulty(ChartInfo info)
         {
-            string[] names = info.Illustrators;
-            if (names == null) return false;
+            if (info.IllustratorSets == null) return false;
 
-            for (int i = 1; i < names.Length; i++)
-                if (names[i] != names[0]) return true;
+            foreach (string[] own in info.IllustratorSets)
+                if (own != null) return true;
             return false;
         }
 
@@ -450,8 +449,7 @@ namespace CustomSong
 
         private static void ShowTitle(ushort songId, ChartInfo info, int difficulty)
         {
-            if (info.Names == null) return;
-            string title = info.Names[difficulty];
+            string[] title = info.TitleSets?[difficulty];
             if (title == null) return;
             if (TitleShown.TryGetValue(songId, out int shown) && shown == difficulty) return;
 
@@ -461,8 +459,7 @@ namespace CustomSong
 
         private static void ShowArtist(ushort songId, ChartInfo info, int difficulty)
         {
-            if (info.Composers == null) return;
-            string artist = info.Composers[difficulty];
+            string[] artist = info.ComposerSets?[difficulty];
             if (artist == null) return;
             if (ArtistShown.TryGetValue(songId, out int shown) && shown == difficulty) return;
 
@@ -475,7 +472,7 @@ namespace CustomSong
             if (!VariesByDifficulty(info)) return;
             if (IllustratorShown.TryGetValue(songId, out int shown) && shown == difficulty) return;
 
-            if (PackText.SetSongText(PackText.SongText.Illustrator, songId, info.Illustrators[difficulty]))
+            if (PackText.SetSongText(PackText.SongText.Illustrator, songId, Illustrators(info, difficulty)))
                 IllustratorShown[songId] = difficulty;
         }
 
@@ -602,7 +599,7 @@ namespace CustomSong
                 }
 
                 Memory.WritePtr(slot + ChartInfoDesigner, Str(info.Charters[d] ?? string.Empty));
-                Memory.WritePtr(slot + ChartInfoJacketDesigner, Str(IllustratorOf(info, d)));
+                Memory.WritePtr(slot + ChartInfoJacketDesigner, Str(Illustrators(info, d)[0]));
                 int? level = info.Level[d];
                 Memory.WriteI32(slot + ChartInfoRating, level ?? 0);
                 Memory.WritePtr(slot + ChartInfoSection,
