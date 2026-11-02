@@ -7,7 +7,7 @@ namespace CustomSong
 {
     internal static class CustomSongCore
     {
-        internal const string Version = "1.1.2";
+        internal const string Version = "1.1.3";
         private static List<ChartPack> _packs = new List<ChartPack>();
         private static bool _registered;
         private static bool _packVisualsDone;
@@ -45,6 +45,16 @@ namespace CustomSong
                 int total = 0;
                 foreach (ChartPack pack in _packs) total += pack.Charts.Count;
                 ModLog.Load($"packs: {_packs.Count}, charts: {total}");
+
+                try
+                {
+                    if (SongFont.Detect(_packs)) Hooks.InstallFont();
+                }
+                catch (Exception e)
+                {
+                    ModLog.Warn("the song titles' font could not be hooked: " + ModLog.Describe(e));
+                }
+
                 mark = Timing.Now;
                 ChartPoolPatch.Apply();
                 mark = Timing.Now;
@@ -61,6 +71,7 @@ namespace CustomSong
             VideoBackground.Follow();
             AutoSwitch.NoteOpen("frame");
             AutoRow.Tick();
+            Hooks.TickStripWindow();
             Auto.AutoResults.Poll();
             if (_rescanIn > 0 && --_rescanIn == 0) HotReloadIfChanged();
 

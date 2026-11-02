@@ -1,7 +1,9 @@
+extern alias UnityEngineCore;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using UnityEngineCore::UnityEngine;
 
 namespace CustomSong
 {
@@ -24,9 +26,10 @@ namespace CustomSong
         private static int ScenarioLabelField = Offsets.Unresolved;
         private static int DlcLabelField = Offsets.Unresolved;
         private static int OutlineVisualField = Offsets.Unresolved;
-        private static int ComponentGameObject = Offsets.Unresolved;
+        private static int ModelField = Offsets.Unresolved;
         private static int StripsField = Offsets.Unresolved;
         private static int StripPageField = Offsets.Unresolved;
+        private const int StripWindow = 11;
         private static int ModelSongArray = Offsets.Unresolved;
         private static bool _fieldsResolved;
         private static bool _fieldsMissing;
@@ -51,7 +54,7 @@ namespace CustomSong
             ScenarioLabelField = FieldResolver.Field("PackVisualMemberLarge", "scenarioTypeContainer");
             DlcLabelField = FieldResolver.Field("PackVisualMemberLarge", "DLCTypeContainer");
             OutlineVisualField = FieldResolver.Field("PackOutlineMember", "outlineVisual");
-            ComponentGameObject = FieldResolver.Lookup("Component", "m_GameObject");
+            ModelField = FieldResolver.Lookup("PackVisualMemberLarge", "_Lf");
             StripsField = FieldResolver.Lookup("PackVisualMemberLarge", "_Mf");
             StripPageField = FieldResolver.Lookup("PackVisualMemberLarge", "_Nf");
             ModelSongArray = FieldResolver.Lookup("_iH", "_sDb");
@@ -159,6 +162,119 @@ namespace CustomSong
             return large & small & outline & dlc & button;
         }
 
+        private static IntPtr _stripCard;
+        private static int _appliedPage = int.MinValue, _appliedStrips = -1;
+
+        internal static void TickStripWindow()
+        {
+            if (_stripCard == IntPtr.Zero) return;
+            if (!Memory.LooksLikeObject(_stripCard) || Faulted || !ResolveFields())
+            {
+                _stripCard = IntPtr.Zero;
+                return;
+            }
+
+            ApplyStripWindow(_stripCard);
+        }
+
+        private static IntPtr ComponentOf(GameObject gameObject, ref IntPtr type,
+                                          string namespaze, string name)
+        {
+            if (gameObject == null) return IntPtr.Zero;
+
+            if (type == IntPtr.Zero)
+            {
+                IntPtr klass = MethodResolver.ClassByFullName(namespaze, name);
+                if (klass == IntPtr.Zero) { SayComponent(name); return IntPtr.Zero; }
+
+                type = Il2CppInterop.Runtime.IL2CPP.il2cpp_type_get_object(
+                    Il2CppInterop.Runtime.IL2CPP.il2cpp_class_get_type(klass));
+                if (type == IntPtr.Zero) { SayComponent(name); return IntPtr.Zero; }
+            }
+
+            if (_getComponent == IntPtr.Zero)
+            {
+                _getComponent = MethodResolver.MethodInfoByRuntime(
+                    "GameObject", "GetComponent", "UnityEngine.CoreModule.dll", "UnityEngine", 1);
+                if (_getComponent == IntPtr.Zero) { SayComponent("GetComponent"); return IntPtr.Zero; }
+            }
+
+            IntPtr* args = stackalloc IntPtr[1];
+            args[0] = type;
+            IntPtr raised = IntPtr.Zero;
+            IntPtr component = Il2CppInterop.Runtime.IL2CPP.il2cpp_runtime_invoke(
+                _getComponent, gameObject.Pointer, (void**)args, ref raised);
+            if (raised != IntPtr.Zero)
+            {
+                SayComponent(name);
+                return IntPtr.Zero;
+            }
+
+            return Memory.LooksLikeObject(component) ? component : IntPtr.Zero;
+        }
+
+        private static IntPtr _getComponent, _textType;
+        private static readonly HashSet<string> _componentReports = new HashSet<string>();
+
+        private static void SayComponent(string what)
+        {
+            if (!_componentReports.Add(what)) return;
+            ModLog.Warn($"the card's {what} component could not be looked up");
+        }
+
+        private static readonly HashSet<IntPtr> _stripsHidden = new HashSet<IntPtr>();
+
+        private static void ApplyStripWindow(IntPtr card)
+        {
+            if (Faulted || !ResolveFields()) return;
+            if (StripsField < 0 || StripPageField < 0 || ModelField < 0) return;
+            IntPtr model = Memory.Ptr(card + ModelField);
+            if (!Memory.LooksLikeObject(model) || !SongCatalog.IsCustomPack(PackId(model))) return;
+            if (!Memory.TryList(Memory.Ptr(card + StripsField), out IntPtr items, out int count)) return;
+            int first = Memory.I32(card + StripPageField);
+            if (first == _appliedPage && count == _appliedStrips) return;
+            _appliedPage = first;
+            _appliedStrips = count;
+
+            if (!_saidWindow)
+            {
+                _saidWindow = true;
+                ModLog.Load($"strip window: {count} strips, first={first}, window={StripWindow}");
+            }
+
+            for (int i = 0; i < count; i++)
+            {
+                try
+                {
+                    IntPtr strip = Memory.Ptr(items + i * IntPtr.Size);
+                    if (!Memory.LooksLikeObject(strip)) continue;
+                    GameObject gameObject = new Component(strip).gameObject;
+                    if (gameObject == null) continue;
+                    bool visible = i >= first && i < first + StripWindow;
+                    if (!visible)
+                    {
+                        if (gameObject.activeSelf && _stripsHidden.Add(strip))
+                            gameObject.SetActive(false);
+                    }
+                    else if (_stripsHidden.Remove(strip))
+                    {
+                        gameObject.SetActive(true);
+                    }
+                }
+                catch (Exception e)
+                {
+                    _stripCard = IntPtr.Zero;
+                    if (_windowReported) continue;
+                    _windowReported = true;
+                    ModLog.Error("the pack card's strip window could not be applied: " +
+                                 ModLog.Describe(e));
+                }
+            }
+        }
+
+        private static bool _windowReported;
+        private static bool _saidWindow;
+
         private static bool InstallCard<T>(string type, string method, IntPtr detour,
                                            out NativeHook<T> hook, out T trampoline) where T : Delegate
         {
@@ -184,8 +300,85 @@ namespace CustomSong
         {
             Alive(Hook.PackVisual);
             ApplyCardTable(self, LargeAssetsField, "large");
+            _stripsHidden.Clear();
+            _saidWindow = false;
+            _appliedPage = int.MinValue;
             _largeCardTramp(self, input, model, index);
             ReportStripCount(self, model);
+            ApplyStripWindow(self);
+            ReportCardFonts(self);
+            _stripCard = self;
+        }
+
+        private static bool _saidFonts;
+
+        private static void ReportCardFonts(IntPtr card)
+        {
+            if (_saidFonts || Faulted || StripsField < 0) return;
+            if (!Memory.LooksLikeObject(Memory.Ptr(card + ModelField))) return;
+            if (!SongCatalog.IsCustomPack(PackId(Memory.Ptr(card + ModelField)))) return;
+            if (!Memory.TryList(Memory.Ptr(card + StripsField), out IntPtr items, out int count)) return;
+
+            for (int i = 0; i < count; i++)
+            {
+                try
+                {
+                    IntPtr strip = Memory.Ptr(items + i * IntPtr.Size);
+                    if (!Memory.LooksLikeObject(strip)) continue;
+                    GameObject gameObject = new Component(strip).gameObject;
+                    if (gameObject == null) continue;
+                    _saidFonts = true;
+                    SayFonts(gameObject.transform, 0);
+                    return;
+                }
+                catch (Exception e)
+                {
+                    _saidFonts = true;
+                    ModLog.Warn("the card's texts could not be read: " + ModLog.Describe(e));
+                }
+            }
+        }
+
+        private static void SayFonts(Transform at, int depth)
+        {
+            if (at == null || depth > 6 || _fontLines >= 30) return;
+
+            try
+            {
+                GameObject gameObject = at.gameObject;
+                IntPtr text = ComponentOf(gameObject, ref _textType, "FastText", "FastText");
+                if (text != IntPtr.Zero)
+                {
+                    _fontLines++;
+                    ModLog.Load($"card text font: '{gameObject.name}' family={Families(Memory.Ptr(text + 0x20))}");
+                }
+
+                int children = at.childCount;
+                for (int i = 0; i < children; i++) SayFonts(at.GetChild(i), depth + 1);
+            }
+            catch (Exception)
+            {
+            }
+        }
+
+        private static int _fontLines;
+
+        private static string Families(IntPtr family)
+        {
+            if (!Memory.LooksLikeObject(family)) return "?";
+            IntPtr assets = Memory.Ptr(family + 0x20);
+            if (!Memory.LooksLikeObject(assets)) return "?";
+            int count = Memory.I32(assets + Offsets.Runtime.ArrayLength);
+            if (count <= 0 || count > 8) return "?";
+            var names = new List<string>(count);
+            for (int i = 0; i < count; i++)
+            {
+                IntPtr asset = Memory.Ptr(assets + Offsets.Runtime.ArrayDataOffset + i * IntPtr.Size);
+                string identifier = Memory.LooksLikeObject(asset) ? Memory.Text(Memory.Ptr(asset + 0x18), 48) : null;
+                names.Add(identifier ?? "null");
+            }
+
+            return string.Join(", ", names.ToArray());
         }
 
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
@@ -351,6 +544,7 @@ namespace CustomSong
 
         private static void DetachPackVisual()
         {
+            _stripCard = IntPtr.Zero;
             _largeCard?.Detach();
             _largeCard = null;
             _largeCardTramp = null;
@@ -398,6 +592,8 @@ namespace CustomSong
             {
                 RebuildCards(self);
             }
+
+            ApplyStripWindow(self);
         }
 
         private static bool CardsForAnotherDifficulty(IntPtr packVisual, byte difficulty)

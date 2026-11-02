@@ -68,6 +68,13 @@
     <Compile Remove="Source\Probe\**\*.cs" Condition="'$(Configuration)' == 'Release' Or '$(Configuration)' == 'BepInExRelease'" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The handful of glyphs the game's own title faces lack; merged in at run time. -->
+    <EmbeddedResource Include="Source\Fonts\TitleGap.ttf">
+      <LogicalName>CustomSong.TitleGap.ttf</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
     <!-- Compile-time references; the loader supplies them at runtime. -->
   <ItemGroup>
     <!-- Harmony, shipped with both loaders; the IL2CPP backend comes with Il2CppInterop at run time. -->

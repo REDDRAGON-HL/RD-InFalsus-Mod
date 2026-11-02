@@ -254,7 +254,11 @@ namespace CustomSong
             }
         }
 
-        internal static IntPtr MethodInfoByRuntime(string typeName, string methodName, string image, string namespaze)
+        internal static IntPtr MethodInfoByRuntime(string typeName, string methodName, string image, string namespaze) =>
+            MethodInfoByRuntime(typeName, methodName, image, namespaze, -1);
+
+        internal static IntPtr MethodInfoByRuntime(string typeName, string methodName, string image,
+                                                   string namespaze, int parameters)
         {
             IntPtr klass = ClassOf(typeName, image, namespaze);
             if (klass == IntPtr.Zero) return IntPtr.Zero;
@@ -267,6 +271,10 @@ namespace CustomSong
                 while ((method = Il2CppInterop.Runtime.IL2CPP.il2cpp_class_get_methods(klass, ref iter)) != IntPtr.Zero)
                 {
                     if (Il2CppInterop.Runtime.IL2CPP.il2cpp_method_get_name_(method) != methodName) continue;
+                    if (Il2CppInterop.Runtime.IL2CPP.il2cpp_method_is_generic(method)) continue;
+                    if (parameters >= 0 &&
+                        (int)Il2CppInterop.Runtime.IL2CPP.il2cpp_method_get_param_count(method) != parameters)
+                        continue;
                     return method;
                 }
 
@@ -280,6 +288,42 @@ namespace CustomSong
             return IntPtr.Zero;
         }
 
+        internal static IntPtr NestedByRuntime(string outerType, string nestedType, string methodName,
+                                               string image, string namespaze)
+        {
+            IntPtr outer = ClassOf(outerType, image, namespaze);
+            if (outer == IntPtr.Zero) return IntPtr.Zero;
+
+            try
+            {
+                IntPtr iter = IntPtr.Zero;
+                IntPtr inner;
+                while ((inner = Il2CppInterop.Runtime.IL2CPP.il2cpp_class_get_nested_types(outer, ref iter)) !=
+                       IntPtr.Zero)
+                {
+                    if (Il2CppInterop.Runtime.IL2CPP.il2cpp_class_get_name_(inner) != nestedType) continue;
+                    Il2CppInterop.Runtime.IL2CPP.il2cpp_runtime_class_init(inner);
+                    IntPtr methods = IntPtr.Zero;
+                    IntPtr method;
+                    while ((method = Il2CppInterop.Runtime.IL2CPP.il2cpp_class_get_methods(inner, ref methods)) !=
+                           IntPtr.Zero)
+                    {
+                        if (Il2CppInterop.Runtime.IL2CPP.il2cpp_method_get_name_(method) != methodName) continue;
+                        IntPtr code = *(IntPtr*)method;
+                        if (code == IntPtr.Zero) continue;
+                        return code;
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                ModLog.Warn($"{outerType}.{nestedType}.{methodName} could not be walked: " +
+                            ModLog.Describe(e));
+            }
+
+            return IntPtr.Zero;
+        }
+
         private static IntPtr ClassOf(string typeName, string image, string namespaze)
         {
             IntPtr klass = FieldResolver.ClassPointer(typeName);
@@ -287,6 +331,34 @@ namespace CustomSong
             klass = Il2CppInterop.Runtime.IL2CPP.GetIl2CppClass(image, namespaze, typeName);
             if (klass != IntPtr.Zero) return klass;
             ModLog.Warn($"{typeName} could not be found, by generated store or by image '{image}'");
+            return IntPtr.Zero;
+        }
+
+        internal static IntPtr ClassByFullName(string namespaze, string name)
+        {
+            try
+            {
+                IntPtr domain = Il2CppInterop.Runtime.IL2CPP.il2cpp_domain_get();
+                if (domain == IntPtr.Zero) return IntPtr.Zero;
+                uint count = 0;
+                IntPtr* assemblies = Il2CppInterop.Runtime.IL2CPP.il2cpp_domain_get_assemblies(domain, ref count);
+                if (assemblies == null || count == 0 || count > 4096) return IntPtr.Zero;
+
+                for (uint i = 0; i < count; i++)
+                {
+                    IntPtr assembly = assemblies[i];
+                    if (assembly == IntPtr.Zero) continue;
+                    IntPtr image = Il2CppInterop.Runtime.IL2CPP.il2cpp_assembly_get_image(assembly);
+                    if (image == IntPtr.Zero) continue;
+                    IntPtr klass = Il2CppInterop.Runtime.IL2CPP.il2cpp_class_from_name(image, namespaze, name);
+                    if (klass != IntPtr.Zero) return klass;
+                }
+            }
+            catch (Exception e)
+            {
+                ModLog.Warn($"{namespaze}.{name} could not be looked up: " + ModLog.Describe(e));
+            }
+
             return IntPtr.Zero;
         }
     }

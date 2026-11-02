@@ -44,6 +44,7 @@ namespace CustomSong
             Count(InstallPlayGate());
             Count(InstallSceneSwitch());
             Count(InstallSelectAwake());
+            Count(InstallFont());
             Installed = installed;
             Attempted = attempted;
             ModLog.Load($"{installed}/{attempted} hooks installed");
@@ -54,6 +55,7 @@ namespace CustomSong
         internal static void Uninstall()
         {
             HarmonyHooks.Uninstall();
+            DetachFont();
             DetachSceneSwitch();
             DetachPlayGate();
             DetachResultsUnlock();
@@ -112,6 +114,7 @@ namespace CustomSong
             PlayGate,
             SceneSwitch,
             SelectAwake,
+            Font,
         }
 
         private static bool Landed(Hook hook, IntPtr target, byte[] prologue)
@@ -167,6 +170,7 @@ namespace CustomSong
             Hook.PlayGate => "SongSelectScene._sN",
             Hook.SceneSwitch => "CoreScene._CB.MoveNext",
             Hook.SelectAwake => "SongSelectScene.Awake",
+            Hook.Font => "FastTextProcessor.EnsureLoaded",
             _ => "(unknown hook)",
         };
 

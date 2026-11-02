@@ -128,6 +128,7 @@ namespace CustomSong
             }
 
             chart.Order();
+            chart.RenumberSkyGroups();
             chart.EnsureSpeed();
             return true;
         }
@@ -478,6 +479,7 @@ namespace CustomSong
             if (skipped > 0)
                 ModLog.Load($"text chart: skipped {skipped} decoration row(s) inside a noinput group");
             chart.Order();
+            chart.RenumberSkyGroups();
             chart.EnsureSpeed();
             return true;
         }
@@ -500,35 +502,44 @@ namespace CustomSong
                 int byTime = Notes[a].Start.CompareTo(Notes[b].Start);
                 return byTime != 0 ? byTime : a.CompareTo(b);
             });
+            var sorted = new List<Note>(count);
+            foreach (int i in order)
+            {
+                Note note = Notes[i];
+                if (note.Type != TypeSkyArea) note.Line = sorted.Count;
+                sorted.Add(note);
+            }
+
+            Notes.Clear();
+            Notes.AddRange(sorted);
+        }
+
+        private void RenumberSkyGroups()
+        {
+            var order = new List<int>();
+            for (int i = 0; i < Notes.Count; i++)
+                if (Notes[i].Type == TypeSkyArea) order.Add(i);
+
+            order.Sort((a, b) =>
+            {
+                int byTime = Notes[a].Start.CompareTo(Notes[b].Start);
+                return byTime != 0 ? byTime : a.CompareTo(b);
+            });
             int next = 0;
-            int previousLine = -1;
-            int previousGroup = int.MinValue;
-            bool previousSky = false;
+            int previous = int.MinValue;
 
             foreach (int i in order)
             {
                 Note note = Notes[i];
-                int group = note.Line;
-
-                if (note.Type == TypeSkyArea && previousSky && group == previousGroup)
+                if (note.Line != previous)
                 {
-                    note.Line = previousLine;
-                }
-                else
-                {
-                    note.Line = next++;
-                    previousLine = note.Line;
-                    previousGroup = group;
+                    next++;
+                    previous = note.Line;
                 }
 
-                previousSky = note.Type == TypeSkyArea;
+                note.Line = next;
                 Notes[i] = note;
             }
-
-            var sorted = new List<Note>(count);
-            foreach (int i in order) sorted.Add(Notes[i]);
-            Notes.Clear();
-            Notes.AddRange(sorted);
         }
 
         private void EnsureSpeed()
