@@ -177,6 +177,7 @@ namespace CustomSong
 
             try
             {
+                Hooks.ResumeStripWindow();
                 CustomSongCore.HotReloadIfChanged();
             }
             catch (Exception e)

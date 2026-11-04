@@ -14,10 +14,11 @@ namespace CustomSong.Auto
         internal readonly float EndWidth;
         internal readonly int Flags;
         internal readonly long NoteId;
+        internal readonly System.IntPtr Address;
 
         internal ChartNote(int startMs, int endMs, int laneFirst, int laneLast, int type, int side,
                            float startX, float endX, float startWidth, float endWidth, int flags,
-                           long noteId)
+                           long noteId, System.IntPtr address)
         {
             StartMs = startMs;
             EndMs = endMs;
@@ -31,6 +32,7 @@ namespace CustomSong.Auto
             EndWidth = endWidth;
             Flags = flags;
             NoteId = noteId;
+            Address = address;
         }
 
         internal bool IsSky => Side == AutoOffsets.Plane.Sky;

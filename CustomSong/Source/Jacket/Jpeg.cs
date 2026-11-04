@@ -84,7 +84,13 @@ namespace CustomSong
                         case 0xC4: ReadHuffman(); break;
                         case 0xC0: case 0xC1: ReadFrame(false); break;
                         case 0xC2: ReadFrame(true); break;
-                        case 0xDD: _restartInterval = ReadU16(); break;
+                        case 0xDD:
+                        {
+                            int length = ReadU16();
+                            _restartInterval = length >= 4 ? ReadU16() : 0;
+                            if (length > 4) _at += length - 4;
+                            break;
+                        }
                         case 0xEE: ReadAdobe(); break;
                         case 0xDA: ReadScan(); break;
                         case 0xC3: case 0xC5: case 0xC6: case 0xC7:
@@ -116,9 +122,14 @@ namespace CustomSong
                 {
                     if (_data[_at] != 0xFF) { _at++; continue; }
 
-                    while (_at + 1 < _data.Length && _data[_at + 1] == 0xFF) _at++;
-                    int marker = _data[_at + 1];
-                    _at += 2;
+                    int at = _at + 1;
+                    while (at < _data.Length && _data[at] == 0xFF) at++;
+                    if (at >= _data.Length) break;
+
+                    if (_data[at] == 0x00) { _at = at + 1; continue; }
+
+                    int marker = _data[at];
+                    _at = at + 1;
                     return marker;
                 }
 
@@ -357,8 +368,10 @@ namespace CustomSong
                         }
 
                         if (_failure != null) return;
+                        bool lastMcu = my == down - 1 && mx == across - 1;
 
-                        if (_restartInterval > 0 && (my * across + mx + 1) % _restartInterval == 0)
+                        if (!lastMcu && _restartInterval > 0 &&
+                            (my * across + mx + 1) % _restartInterval == 0)
                         {
                             eobRun = 0;
                             _bits = 0;

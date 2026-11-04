@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace CustomSong
@@ -43,6 +45,44 @@ namespace CustomSong
             if (songInfo == IntPtr.Zero) return false;
             if (!Offsets.Ready) return false;
             return SongCatalog.CustomSongIds.Contains(Memory.U16(songInfo + Offsets.Song.Id));
+        }
+
+        internal static bool HasAny(IntPtr songInfo)
+        {
+            if (!Ready || songInfo == IntPtr.Zero) return false;
+            return WithResults.Contains(Memory.U16(songInfo + Offsets.Song.Id));
+        }
+
+        private static readonly HashSet<ushort> WithResults = new HashSet<ushort>();
+        internal static int ResultCount => WithResults.Count;
+
+        internal static void ScanResults(IntPtr songData)
+        {
+            WithResults.Clear();
+            if (!Ready || !Offsets.Ready || songData == IntPtr.Zero) return;
+            IntPtr songs = Memory.Ptr(songData + Offsets.SongData.AllSongs);
+            if (!Memory.LooksLikeObject(songs)) return;
+            int count = Memory.I32(songs + Offsets.Runtime.ArrayLength);
+            int size = Offsets.Song.Size;
+            int found = 0;
+            if (size <= 0) return;
+
+            foreach (ushort id in SongCatalog.CustomSongIds)
+            {
+                if (id >= count) continue;
+                IntPtr slot = songs + Offsets.Runtime.ArrayDataOffset + id * size;
+                if (!Hooks.StoredHasAny(Table, slot)) continue;
+                WithResults.Add(id);
+                found++;
+            }
+
+            ModLog.Load($"custom results: {found} song(s) have a recorded result");
+        }
+
+        internal static void NoteResult(IntPtr songInfo)
+        {
+            if (songInfo == IntPtr.Zero) return;
+            WithResults.Add(Memory.U16(songInfo + Offsets.Song.Id));
         }
 
         internal static void Prepare()

@@ -7,7 +7,7 @@ namespace CustomSong
 {
     internal static class CustomSongCore
     {
-        internal const string Version = "1.1.3";
+        internal const string Version = "1.1.4";
         private static List<ChartPack> _packs = new List<ChartPack>();
         private static bool _registered;
         private static bool _packVisualsDone;
@@ -101,6 +101,7 @@ namespace CustomSong
                 ModLog.Load(FieldResolver.Stats());
                 RegisterPacks();
                 ScoreStore.Prepare();
+                ScoreStore.ScanResults(_songData);
                 _registered = true;
                 ApplyPackVisuals();
                 ModLog.Load("charts registered");
@@ -171,6 +172,7 @@ namespace CustomSong
 
                 RegisterPacks();
                 ScoreStore.Refile();
+                ScoreStore.ScanResults(_songData);
                 mark = Timing.Now;
                 ApplyPackVisuals();
                 ModLog.Load("charts reloaded");
@@ -231,7 +233,6 @@ namespace CustomSong
         internal static bool ApplyVisualsTo(IntPtr assets)
         {
             if (_packs.Count == 0) return false;
-            if (_visualTables.Contains(assets)) return true;
             int highestId = 0;
             foreach (ChartPack pack in _packs)
             {
@@ -245,23 +246,31 @@ namespace CustomSong
                 return false;
             }
 
+            bool first = _visualTables.Add(assets);
             foreach (ChartPack pack in _packs)
             {
                 if (pack.Names != null) PackText.SetPackName(pack.PackId, pack.Names);
                 else PackText.SetPackName(pack.PackId, pack.Name);
                 int applied = PackText.SetPackVisuals(assets, pack.PackId, pack);
 
-                ModLog.Load($"pack '{pack.Name}' id={pack.PackId} " +
-                            $"table=0x{assets.ToInt64():X} visuals={applied} " +
-                            $"of {pack.Visuals.Count} drawn");
+                if (first)
+                    ModLog.Load($"pack '{pack.Name}' id={pack.PackId} " +
+                                $"table=0x{assets.ToInt64():X} visuals={applied} " +
+                                $"of {pack.Visuals.Count} drawn");
             }
 
-            _visualTables.Add(assets);
             return true;
         }
 
-        private static readonly List<IntPtr> _visualTables = new List<IntPtr>();
+        private static readonly HashSet<IntPtr> _visualTables = new HashSet<IntPtr>();
         internal static void InvalidateVisualTables() => _visualTables.Clear();
+
+        internal static void RescanResults()
+        {
+            if (!ScoreStore.Ready || _songData == IntPtr.Zero) return;
+            ScoreStore.ScanResults(_songData);
+        }
+
         internal static void Shutdown() => Hooks.Uninstall();
 
         private static int RegisterAudio(List<ChartPack> packs)

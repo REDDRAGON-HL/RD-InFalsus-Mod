@@ -9,6 +9,8 @@ namespace CustomSong.Auto
         internal static AutoSong Current { get; private set; } = new AutoSong(IntPtr.Zero);
         private readonly IntPtr _owner;
         private double _lastMs = -1.0;
+        internal double TickSeconds;
+        internal IntPtr Engine;
         internal Chart Chart { get; } = new Chart();
         internal Floor Floor { get; }
         internal Sky Sky { get; } = new Sky();
@@ -28,7 +30,11 @@ namespace CustomSong.Auto
                 AutoMark.Ran = false;
                 ModLog.Load($"autoplay: chart start ({(AutoSwitch.On ? "on" : "off")})");
                 AutoResults.BlockParticles(AutoSwitch.On);
+                IntPtr engine = Current.Engine;
+                double tickSeconds = Current.TickSeconds;
                 Current = new AutoSong(lnp, Current.Floor);
+                Current.Engine = engine;
+                Current.TickSeconds = tickSeconds;
             }
 
             Current.Chart.TryLoad(lnp, chartSeconds * 1000.0);
@@ -36,6 +42,8 @@ namespace CustomSong.Auto
 
         internal static void Frame(IntPtr engine, double seconds)
         {
+            Current.TickSeconds = seconds;
+            Current.Engine = engine;
             if (!Memory.LooksLikeObject(engine)) return;
             FrameAt(engine, Memory.F64(engine + AutoOffsets.Engine.ChartTime) * 1000.0, seconds);
         }
@@ -50,6 +58,8 @@ namespace CustomSong.Auto
                 Current = new AutoSong(Current._owner, Current.Floor);
             AutoSong song = Current;
             song._lastMs = nowMs;
+            song.TickSeconds = seconds;
+            song.Engine = engine;
             if (AutoHooks.Writing) song.Play(engine, seconds, nowMs);
             else song.LetGoLanes(engine, seconds);
         }

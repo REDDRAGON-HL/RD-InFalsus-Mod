@@ -83,6 +83,7 @@ namespace CustomSong
             }
 
             _previewTrampoline(self, songInfo, methodInfo);
+            Hooks.ResumeStripWindow();
         }
 
         private static void DetachSongSelect()

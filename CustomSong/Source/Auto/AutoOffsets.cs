@@ -48,6 +48,7 @@ namespace CustomSong.Auto
             internal static int Flags = 0x74;
             internal static int LaneFirst = 0x78;
             internal static int LaneLast = 0x7C;
+            internal const int Finished = 0x70;
         }
 
         internal static class Plane
@@ -83,6 +84,25 @@ namespace CustomSong.Auto
         internal static class ChartObject
         {
             internal static int PlaneArrays = 0x10;
+            internal static int Judgements = 0x38;
+        }
+
+        internal static class JudgementRecord
+        {
+            internal const int Size = 40;
+            internal const int RelativeMs = 8;
+            internal const int Kind = 0x18;
+            internal const int Grade = 0x20;
+            internal const int Judged = 0x21;
+        }
+
+        internal static class JudgementDict
+        {
+            internal const int EntrySize = 32;
+            internal const int EntryKey = 8;
+            internal const int EntryValue = 16;
+            internal const int MemoryIndex = 8;
+            internal const int MemoryCount = 12;
         }
 
         internal static class PlaneHolder
@@ -133,6 +153,7 @@ namespace CustomSong.Auto
             Track.Engine = F("Track", "_YnA", Track.Engine);
             NotePlayer.ChartObject = F("LogicalNotePlayer", "_ve", NotePlayer.ChartObject);
             ChartObject.PlaneArrays = F("_T", "_vC", ChartObject.PlaneArrays);
+            ChartObject.Judgements = F("_T", "_XC", ChartObject.Judgements);
             PlaneHolder.NoteArray = F("_hA", "_ye", PlaneHolder.NoteArray);
             PlaneHolder.Count = F("_hA", "_ze", PlaneHolder.Count);
             InputLane.PressEdge = F("_zD", "_lfA", InputLane.PressEdge);

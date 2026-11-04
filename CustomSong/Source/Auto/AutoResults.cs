@@ -58,11 +58,21 @@ namespace CustomSong.Auto
             void Count(bool ok) { attempted++; if (ok) installed++; }
 
             ResultsSkip.Install();
-            MethodInfo start = HarmonyHooks.Target("ResultsScene", "Start", "ifapp.Game.Scenes");
-            Count(HarmonyHooks.Patch(start,
-                HarmonyHooks.Handler(typeof(AutoResults), nameof(StartPrefix)),
-                HarmonyHooks.Handler(typeof(AutoResults), nameof(StartPostfix)),
-                HarmonyHooks.Handler(typeof(AutoResults), nameof(StartFinalizer))));
+            bool practice = Loaded("InFalsusPractice");
+            if (practice)
+            {
+                ModLog.Load("autoplay: In Falsus Practice owns ResultsScene.Start; " +
+                            "the drop container marks the results screen");
+            }
+            else
+            {
+                MethodInfo start = HarmonyHooks.Target("ResultsScene", "Start", "ifapp.Game.Scenes");
+                Count(HarmonyHooks.Patch(start,
+                    HarmonyHooks.Handler(typeof(AutoResults), nameof(StartPrefix)),
+                    HarmonyHooks.Handler(typeof(AutoResults), nameof(StartPostfix)),
+                    HarmonyHooks.Handler(typeof(AutoResults), nameof(StartFinalizer))));
+            }
+
             MethodInfo destroy = HarmonyHooks.Target("ResultsScene", "OnDestroy", "ifapp.Game.Scenes");
             Count(HarmonyHooks.Patch(destroy, null,
                 HarmonyHooks.Handler(typeof(AutoResults), nameof(DestroyPostfix))));
@@ -80,6 +90,21 @@ namespace CustomSong.Auto
             ModLog.Load($"autoplay: results hooks {installed}/{attempted}" +
                         $", text={(text != IntPtr.Zero ? "yes" : "no")}" +
                         $", inventory={(addPatched ? "watched" : "not watched")}");
+        }
+
+        private static bool Loaded(string assembly)
+        {
+            try
+            {
+                foreach (System.Reflection.Assembly loaded in AppDomain.CurrentDomain.GetAssemblies())
+                    if (loaded.GetName().Name == assembly) return true;
+            }
+            catch (Exception e)
+            {
+                ModLog.Warn("autoplay: the loaded plugins could not be listed: " + ModLog.Describe(e));
+            }
+
+            return false;
         }
 
         internal static unsafe IntPtr StringSetter()
@@ -268,6 +293,7 @@ namespace CustomSong.Auto
             AutoMark.Ran = false;
             ScoreStore.EncounterRan = false;
             BlockParticles(false);
+            CustomSongCore.RescanResults();
         }
 
         private static void Plain(IntPtr scene)
