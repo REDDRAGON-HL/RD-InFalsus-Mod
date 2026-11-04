@@ -128,15 +128,27 @@ namespace CustomSong.Auto
 
             if (Writing)
             {
-                cursorOnNote = 1;
+                double delta = AutoMemory.LooksLikeNote(note)
+                    ? Memory.F64(note + AutoOffsets.Note.DeltaMs)
+                    : double.PositiveInfinity;
 
-                try
+                if (!double.IsNaN(delta) && !double.IsInfinity(delta) && delta <= 0.0)
                 {
-                    AutoSong.Current.Sky.AimAt(self, note);
+                    cursorOnNote = 1;
+
+                    try
+                    {
+                        Exact.Flick(note);
+                        AutoSong.Current.Sky.AimAt(self, note);
+                    }
+                    catch (Exception e)
+                    {
+                        Fault("_nz", e);
+                    }
                 }
-                catch (Exception e)
+                else
                 {
-                    Fault("_nz", e);
+                    cursorOnNote = 0;
                 }
             }
 
@@ -179,6 +191,18 @@ namespace CustomSong.Auto
             }
 
             _hbTramp(lnp, chartTime, trackTime, unitsPerSecond, laneLists, window);
+
+            if (!Faulted)
+            {
+                try
+                {
+                    Exact.FloorTick(lnp, AutoSong.Current.Engine, chartTime * 1000.0);
+                }
+                catch (Exception e)
+                {
+                    Fault("_hb", e);
+                }
+            }
         }
 
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]

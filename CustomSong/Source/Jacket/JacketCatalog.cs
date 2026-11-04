@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace CustomSong
 {
@@ -12,29 +14,61 @@ namespace CustomSong
 
         private static readonly Dictionary<string, string[]> Paths =
             new Dictionary<string, string[]>(StringComparer.Ordinal);
-        private static readonly List<string> Waiting = new List<string>();
         private static readonly HashSet<string> Imported = new HashSet<string>(StringComparer.Ordinal);
         private static IntPtr _armed;
         private static IntPtr _armedMaterial;
         private static bool _armedBackground;
+
+        internal static void WarmAll()
+        {
+            if (Interlocked.Exchange(ref _warming, 1) == 1) return;
+            var paths = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string[] byDifficulty in Paths.Values)
+            {
+                for (int d = 0; d < byDifficulty.Length; d++)
+                {
+                    string path = byDifficulty[d];
+                    if (path != null && seen.Add(path)) paths.Add(path);
+                }
+            }
+
+            if (paths.Count == 0)
+            {
+                _warming = 0;
+                return;
+            }
+
+            Task.Run(() =>
+            {
+                try
+                {
+                    foreach (string path in paths)
+                    {
+                        string warm = path;
+                        MainThread.DecodeAndBuild(
+                            () => JacketFactory.DecodeFile(warm, out _),
+                            image => JacketFactory.BuildFrom(image, warm, "jacket", out _));
+                    }
+                }
+                finally
+                {
+                    _warming = 0;
+                }
+            });
+        }
+
+        private static int _warming;
         internal static int Count => Paths.Count;
 
         internal static void Reset()
         {
             ByBase.Clear();
             Paths.Clear();
-            Waiting.Clear();
             Imported.Clear();
             ChartArrays.Clear();
+            _warming = 0;
             Disarm();
-        }
-
-        internal static void Step()
-        {
-            if (Waiting.Count == 0) return;
-            string baseName = Waiting[0];
-            Waiting.RemoveAt(0);
-            Materials(baseName);
         }
 
         internal static long Asked, Claimed;
@@ -116,7 +150,6 @@ namespace CustomSong
             Imported.Add(info.BaseName);
             Paths[info.BaseName] = info.JacketPaths;
             ByBase.Remove(info.BaseName);
-            if (!Waiting.Contains(info.BaseName)) Waiting.Add(info.BaseName);
 
             for (int d = 0; d < ChartInfo.Difficulties; d++)
             {

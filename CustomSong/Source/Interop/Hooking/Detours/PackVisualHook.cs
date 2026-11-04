@@ -13,6 +13,7 @@ namespace CustomSong
         private const string PackNamespace = "ifapp.Game";
         private static int CardsField = Offsets.Unresolved;
         private static int CardViewModel = Offsets.Unresolved;
+        private const int CardNewTag = 0x70;
         private static int PackDataAccess = Offsets.Unresolved;
         private static int ViewModelSong = Offsets.Unresolved;
         private static int LargeAssetsField = Offsets.Unresolved;
@@ -168,13 +169,86 @@ namespace CustomSong
         internal static void TickStripWindow()
         {
             if (_stripCard == IntPtr.Zero) return;
-            if (!Memory.LooksLikeObject(_stripCard) || Faulted || !ResolveFields())
+            if (!Memory.LooksLikeObject(_stripCard) || Memory.Ptr(_stripCard + 0x10) == IntPtr.Zero ||
+                Faulted || !ResolveFields())
             {
                 _stripCard = IntPtr.Zero;
+                _cards.Clear();
                 return;
             }
 
             ApplyStripWindow(_stripCard);
+        }
+
+        private struct CardCall
+        {
+            public IntPtr Self, A, B, C;
+            public int Index, Kind;
+        }
+
+        private static readonly List<CardCall> _cards = new List<CardCall>();
+        private static bool _newTagsDirty;
+        private static bool _saidResume;
+        internal static void MarkNewTagsDirty() => _newTagsDirty = true;
+
+        internal static void ResumeStripWindow()
+        {
+            _newTagsDirty = true;
+
+            if (_stripCard != IntPtr.Zero && Memory.LooksLikeObject(_stripCard) &&
+                Memory.Ptr(_stripCard + 0x10) != IntPtr.Zero)
+                return;
+
+            try
+            {
+                GameObject found = GameObject.Find("PackVisualMemberLarge");
+                if (found == null) return;
+                IntPtr type = IntPtr.Zero;
+                IntPtr card = ComponentOf(found, ref type, "ifapp.Game", "PackVisualMemberLarge");
+                if (card != IntPtr.Zero) _stripCard = card;
+            }
+            catch (Exception e)
+            {
+                ModLog.WarnRelease("the pack card could not be picked up again: " + ModLog.Describe(e));
+            }
+
+            if (!_saidResume)
+            {
+                _saidResume = true;
+                ModLog.Load($"new tags: resume found card=0x{_stripCard.ToInt64():X}");
+            }
+        }
+
+        private static void Remember(int kind, IntPtr self, IntPtr a, IntPtr b, IntPtr c, int index)
+        {
+            for (int i = 0; i < _cards.Count; i++)
+            {
+                if (_cards[i].Self != self) continue;
+                _cards[i] = new CardCall { Self = self, A = a, B = b, C = c, Index = index, Kind = kind };
+                return;
+            }
+
+            _cards.Add(new CardCall { Self = self, A = a, B = b, C = c, Index = index, Kind = kind });
+        }
+
+        private static void ReplayCards()
+        {
+            for (int i = 0; i < _cards.Count; i++)
+            {
+                CardCall call = _cards[i];
+                if (!Memory.LooksLikeObject(call.Self) || Memory.Ptr(call.Self + 0x10) == IntPtr.Zero) continue;
+
+                try
+                {
+                    if (call.Kind == 1) _smallCardTramp(call.Self, call.A, call.B, call.Index);
+                    else if (call.Kind == 2) _outlineTramp(call.Self, call.A, call.B, call.C, call.Index);
+                }
+                catch (Exception e)
+                {
+                    ModLog.Warn("a pack card could not be rebuilt after its table changed: " +
+                                ModLog.Describe(e));
+                }
+            }
         }
 
         private static IntPtr ComponentOf(GameObject gameObject, ref IntPtr type,
@@ -224,6 +298,44 @@ namespace CustomSong
 
         private static readonly HashSet<IntPtr> _stripsHidden = new HashSet<IntPtr>();
 
+        private static void ApplyNewTags(IntPtr items, int count)
+        {
+            if (!Offsets.Ready || !ScoreStore.Ready) return;
+            int custom = 0, changed = 0;
+
+            for (int i = 0; i < count; i++)
+            {
+                try
+                {
+                    IntPtr card = Memory.Ptr(items + i * IntPtr.Size);
+                    if (!Memory.LooksLikeObject(card)) continue;
+                    if (Memory.Ptr(card + 0x10) == IntPtr.Zero) continue;
+                    IntPtr entry = Memory.Ptr(card + CardViewModel);
+                    if (!Memory.LooksLikeObject(entry)) continue;
+                    IntPtr songInfo = entry + ViewModelSong;
+                    ushort id = Memory.U16(songInfo + Offsets.Song.Id);
+                    if (!SongCatalog.CustomSongIds.Contains(id)) continue;
+                    custom++;
+                    bool show = !ScoreStore.HasAny(songInfo);
+                    IntPtr tag = Memory.Ptr(card + CardNewTag);
+                    if (!Memory.LooksLikeObject(tag)) continue;
+                    if (Memory.Ptr(tag + 0x10) == IntPtr.Zero) continue;
+                    GameObject go = new Component(tag).gameObject;
+                    if (go == null || go.activeSelf == show) continue;
+                    go.SetActive(show);
+                    changed++;
+                }
+                catch (Exception e)
+                {
+                    ModLog.WarnRelease("the pack strip's NEW tag could not be corrected: " +
+                                       ModLog.Describe(e));
+                }
+            }
+
+            ModLog.Load($"new tags: {count} strips, {custom} custom, {changed} changed, " +
+                        $"results={ScoreStore.ResultCount}");
+        }
+
         private static void ApplyStripWindow(IntPtr card)
         {
             if (Faulted || !ResolveFields()) return;
@@ -231,6 +343,13 @@ namespace CustomSong
             IntPtr model = Memory.Ptr(card + ModelField);
             if (!Memory.LooksLikeObject(model) || !SongCatalog.IsCustomPack(PackId(model))) return;
             if (!Memory.TryList(Memory.Ptr(card + StripsField), out IntPtr items, out int count)) return;
+
+            if (_newTagsDirty)
+            {
+                _newTagsDirty = false;
+                ApplyNewTags(items, count);
+            }
+
             int first = Memory.I32(card + StripPageField);
             if (first == _appliedPage && count == _appliedStrips) return;
             _appliedPage = first;
@@ -299,11 +418,15 @@ namespace CustomSong
         private static void LargeCardDetour(IntPtr self, IntPtr input, IntPtr model, int index)
         {
             Alive(Hook.PackVisual);
+            long changesAtBuild = PackText.Changes;
             ApplyCardTable(self, LargeAssetsField, "large");
             _stripsHidden.Clear();
             _saidWindow = false;
             _appliedPage = int.MinValue;
+            _newTagsDirty = true;
             _largeCardTramp(self, input, model, index);
+            ApplyCardTable(self, LargeAssetsField, "large");
+            if (PackText.Changes != changesAtBuild) ReplayCards();
             ReportStripCount(self, model);
             ApplyStripWindow(self);
             ReportCardFonts(self);
@@ -388,6 +511,7 @@ namespace CustomSong
             ApplyCardTable(self, SmallAssetsField, "list card");
             ReportCardArt(self, model, index);
             _smallCardTramp(self, dataAccess, model, index);
+            Remember(1, self, dataAccess, model, IntPtr.Zero, index);
         }
 
         private static bool _saidCards;
@@ -415,6 +539,8 @@ namespace CustomSong
             Alive(Hook.PackVisual);
             ApplyCardTable(self, OutlineAssetsField, "outline");
             _outlineTramp(self, dataAccess, input, model, index);
+            ApplyCardTable(self, OutlineAssetsField, "outline");
+            Remember(2, self, dataAccess, input, model, index);
             ReportOutlineArt(self, model);
         }
 
@@ -433,16 +559,23 @@ namespace CustomSong
             try
             {
                 IntPtr assets = Memory.Ptr(card + field);
-                if (!Memory.LooksLikeObject(assets)) return;
+                if (Memory.LooksLikeObject(assets)) FillTable(assets, which);
 
-                if (_cardTables.Add(assets))
-                    ModLog.Load($"pack visuals: the {which} card reads a table at 0x{assets.ToInt64():X}");
-                CustomSongCore.ApplyVisualsTo(assets);
+                if (PackText.TryGetVisuals(out IntPtr fromDataAccess) &&
+                    Memory.LooksLikeObject(fromDataAccess) && fromDataAccess != assets)
+                    FillTable(fromDataAccess, "DataAccess");
             }
             catch (Exception e)
             {
                 Fault(Hook.PackVisual, e);
             }
+        }
+
+        private static void FillTable(IntPtr assets, string which)
+        {
+            if (_cardTables.Add(assets))
+                ModLog.Load($"pack visuals: the {which} card reads a table at 0x{assets.ToInt64():X}");
+            CustomSongCore.ApplyVisualsTo(assets);
         }
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -593,6 +726,7 @@ namespace CustomSong
                 RebuildCards(self);
             }
 
+            _newTagsDirty = true;
             ApplyStripWindow(self);
         }
 

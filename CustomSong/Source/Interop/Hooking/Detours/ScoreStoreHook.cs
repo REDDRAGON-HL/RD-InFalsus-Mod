@@ -137,6 +137,21 @@ namespace CustomSong
             return *(ulong*)(record + PlayerScore);
         }
 
+        internal static bool StoredHasAny(IntPtr table, IntPtr songInfo)
+        {
+            if (_readResultTramp == null || table == IntPtr.Zero || songInfo == IntPtr.Zero) return false;
+            byte* record = stackalloc byte[0x80];
+            for (int difficulty = 0; difficulty < 4; difficulty++)
+            {
+                new Span<byte>(record, 0x80).Clear();
+                byte flag = (byte)(1 << difficulty);
+                if (_readResultTramp(table, songInfo, flag, (IntPtr)record, IntPtr.Zero) != 0)
+                    return true;
+            }
+
+            return false;
+        }
+
         private static void DetachScoreStore()
         {
             _updateEncounter?.Detach();
@@ -255,6 +270,7 @@ namespace CustomSong
             if (ours)
             {
                 ScoreStore.Merged++;
+                ScoreStore.NoteResult(songInfo);
                 ScoreStore.Save();
             }
 

@@ -124,7 +124,6 @@ namespace CustomSong
             Alive(Hook.SceneSwitch);
             byte more = _moveNextTramp(self, methodInfo);
             SceneSwitchCalls++;
-            if (more == 0) CustomSongCore.RescanSoon();
             if (!Memory.LooksLikeObject(self)) return more;
             int state = Memory.I32(self + StateField);
             if (state != SceneSwitchLastState)
@@ -177,6 +176,7 @@ namespace CustomSong
 
             try
             {
+                Hooks.ResumeStripWindow();
                 CustomSongCore.HotReloadIfChanged();
             }
             catch (Exception e)

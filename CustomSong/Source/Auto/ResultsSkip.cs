@@ -94,6 +94,7 @@ namespace CustomSong.Auto
         {
             try
             {
+                CustomSongCore.OnSceneTransition(Memory.Text(loadName));
                 if (Memory.Text(unloadName) == ResultsScene) AutoResults.OnLeavingResults();
 
                 if (Redirects(unloadName, loadName, out IntPtr destination))

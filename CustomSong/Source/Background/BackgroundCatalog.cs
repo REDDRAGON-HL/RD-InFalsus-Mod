@@ -9,7 +9,8 @@ namespace CustomSong
         {
             internal IntPtr Material;
             internal string Video;
-            internal bool Said => Material != IntPtr.Zero || Video != null;
+            internal string Still;
+            internal bool Said => Material != IntPtr.Zero || Video != null || Still != null;
         }
 
         private static readonly Dictionary<string, Entry[]> ByBase =
@@ -22,32 +23,17 @@ namespace CustomSong
             reason = null;
             if (info.BackgroundPaths == null) return true;
             var entries = new Entry[ChartInfo.Difficulties];
-            bool all = true;
 
             for (int d = 0; d < entries.Length; d++)
             {
                 string path = info.BackgroundPaths[d];
                 if (path == null) continue;
-
-                if (IsVideo(path))
-                {
-                    entries[d].Video = path;
-                    continue;
-                }
-
-                IntPtr material = JacketFactory.Build(path, "background", out string why);
-                if (material == IntPtr.Zero)
-                {
-                    all = false;
-                    _ = why;
-                    continue;
-                }
-
-                entries[d].Material = material;
+                if (IsVideo(path)) entries[d].Video = path;
+                else entries[d].Still = path;
             }
 
             ByBase[info.BaseName] = entries;
-            return all;
+            return true;
         }
 
         internal static bool Find(IntPtr songInfo, int difficulty, out Entry entry, out string why)
@@ -57,30 +43,53 @@ namespace CustomSong
             string baseName = JacketCatalog.NameOf(songInfo);
             if (baseName == null) return false;
             if (!ByBase.TryGetValue(baseName, out Entry[] entries)) return false;
-
+            int chosen;
             if (difficulty >= 0 && difficulty < entries.Length)
             {
-                entry = entries[difficulty];
+                chosen = difficulty;
             }
             else
             {
                 for (int i = 0; i < entries.Length; i++)
                 {
-                    if (i == 0) entry = entries[0];
-                    else if (entries[i].Material != entry.Material || entries[i].Video != entry.Video)
+                    if (i == 0) continue;
+                    if (entries[i].Material != entries[0].Material ||
+                        entries[i].Video != entries[0].Video ||
+                        entries[i].Still != entries[0].Still)
                     {
                         return false;
                     }
                 }
 
-                if (!entry.Said) return false;
+                chosen = 0;
             }
 
-            if (!entry.Said) return false;
-            if (entry.Video == null) return true;
-            IntPtr material = VideoBackground.Material(entry.Video, out why);
-            if (material == IntPtr.Zero) return false;
-            entry.Material = material;
+            Entry found = entries[chosen];
+            if (!found.Said) return false;
+
+            if (found.Video != null)
+            {
+                IntPtr material = VideoBackground.Material(found.Video, out why);
+                if (material == IntPtr.Zero) return false;
+                found.Material = material;
+                found.Video = null;
+            }
+            else if (found.Material == IntPtr.Zero && found.Still != null)
+            {
+                string path = found.Still;
+                found.Still = null;
+                IntPtr material = JacketFactory.Build(path, "background", out why);
+                if (material == IntPtr.Zero)
+                {
+                    entries[chosen] = found;
+                    return false;
+                }
+
+                found.Material = material;
+            }
+
+            entries[chosen] = found;
+            entry = found;
             return true;
         }
 

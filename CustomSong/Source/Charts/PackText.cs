@@ -46,6 +46,7 @@ namespace CustomSong
             for (int i = count; i < wanted; i++)
                 Buffer.MemoryCopy((void*)shape, (void*)(target + i * stride), stride, stride);
             Memory.WritePtr(packAssets + PackAssetsTable, grown);
+            Changes++;
             ModLog.Load($"pack visual rows: {count} -> {wanted} (shape=row {Math.Min(TemplateRow, count - 1)})");
             return true;
         }
@@ -102,6 +103,8 @@ namespace CustomSong
 
         private static readonly Dictionary<string, IntPtr> Built =
             new Dictionary<string, IntPtr>(StringComparer.Ordinal);
+        private static readonly HashSet<IntPtr> BuiltMaterials = new HashSet<IntPtr>();
+        internal static long Changes;
 
         internal static int SetPackVisuals(IntPtr packAssets, int packId, ChartPack pack)
         {
@@ -127,7 +130,15 @@ namespace CustomSong
                 if (string.IsNullOrEmpty(path) || !File.Exists(path))
                 {
                     IntPtr fallback = DefaultArt[slot];
-                    if (Memory.LooksLikeObject(fallback)) Memory.WritePtr(row + offset, fallback);
+                    if (Memory.LooksLikeObject(fallback))
+                    {
+                        IntPtr old = Memory.Ptr(row + offset);
+                        if (old != fallback)
+                        {
+                            Memory.WritePtr(row + offset, fallback);
+                            Changes++;
+                        }
+                    }
                     continue;
                 }
 
@@ -135,6 +146,12 @@ namespace CustomSong
                 if (!Memory.LooksLikeObject(source))
                 {
                     ModLog.Warn($"pack {packId} visual '{field}' has no material to clone");
+                    continue;
+                }
+
+                if (BuiltMaterials.Contains(source))
+                {
+                    applied++;
                     continue;
                 }
 
@@ -149,18 +166,28 @@ namespace CustomSong
                     }
 
                     Built[materialKey] = material;
+                    BuiltMaterials.Add(material);
                     ModLog.Load($"pack {packId} visual {field} off=0x{offset:X} " +
                                 $"src=0x{source.ToInt64():X} mat=0x{material.ToInt64():X}");
                 }
 
-                Memory.WritePtr(row + offset, material);
+                if (source != material)
+                {
+                    Memory.WritePtr(row + offset, material);
+                    Changes++;
+                }
+
                 applied++;
             }
 
             return applied;
         }
 
-        internal static void ResetVisualCache() => Built.Clear();
+        internal static void ResetVisualCache()
+        {
+            Built.Clear();
+            BuiltMaterials.Clear();
+        }
 
         internal static int Language()
         {

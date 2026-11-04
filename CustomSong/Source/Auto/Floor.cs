@@ -5,9 +5,9 @@ namespace CustomSong.Auto
 {
     internal sealed unsafe class Floor
     {
-        private const double CatchUpMs = 120.0;
+        private const double CatchUpMs = 1.0e12;
         private const double NotHeld = -1.0;
-        private const double PressLeadMs = 8.0;
+        private const double PressLeadMs = 0.0;
         private const double TapHoldMs = 50.0;
         private const double HoldSlackMs = 40.0;
         private readonly Chart _chart;
@@ -57,6 +57,8 @@ namespace CustomSong.Auto
             Release(lanes, tickSeconds, nowMs);
             if (_chart.Loaded) Press(lanes, tickSeconds, nowMs);
         }
+
+        internal void MarkPressed(long id) => _pressed.Add(id);
 
         private void Press(IntPtr lanes, double tickSeconds, double nowMs)
         {

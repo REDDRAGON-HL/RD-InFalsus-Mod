@@ -70,9 +70,53 @@ namespace CustomSong
 
         private static readonly Dictionary<string, IntPtr> Built =
             new Dictionary<string, IntPtr>(StringComparer.Ordinal);
+        internal static void Reset() => Built.Clear();
 
         private static Png.Image Decode(byte[] bytes, out string reason) =>
             Jpeg.Looks(bytes) ? Jpeg.Decode(bytes, out reason) : Png.Decode(bytes, out reason);
+
+        internal static Png.Image DecodeFile(string path, out string reason)
+        {
+            reason = null;
+            byte[] bytes;
+            try
+            {
+                bytes = File.ReadAllBytes(path);
+            }
+            catch (Exception e)
+            {
+                reason = $"{Path.GetFileName(path)} could not be read: {ModLog.Describe(e)}";
+                return null;
+            }
+
+            return Decode(bytes, out reason);
+        }
+
+        internal static IntPtr BuildFrom(Png.Image image, string pngPath, string what, out string reason)
+        {
+            reason = null;
+            string key = what + "\n" + pngPath;
+            if (Built.TryGetValue(key, out IntPtr known)) return known;
+            IntPtr material = BuildUncached(image, what, out reason);
+            if (material != IntPtr.Zero) Built[key] = material;
+            return material;
+        }
+
+        internal static IntPtr BuildUncached(Png.Image image, string what, out string reason)
+        {
+            reason = null;
+            if (!Resolve())
+            {
+                reason = "the game's texture and material types could not be found";
+                return IntPtr.Zero;
+            }
+
+            IntPtr texture = BuildTexture(image, out reason);
+            if (texture == IntPtr.Zero) return IntPtr.Zero;
+            IntPtr material = BuildMaterial(texture, what, out reason);
+            if (material == IntPtr.Zero) return IntPtr.Zero;
+            return material;
+        }
 
         private static IntPtr BuildUncached(string pngPath, string what, out string reason)
         {
@@ -83,18 +127,7 @@ namespace CustomSong
                 return IntPtr.Zero;
             }
 
-            byte[] bytes;
-            try
-            {
-                bytes = File.ReadAllBytes(pngPath);
-            }
-            catch (Exception e)
-            {
-                _ = e;
-                return IntPtr.Zero;
-            }
-
-            Png.Image image = Decode(bytes, out reason);
+            Png.Image image = DecodeFile(pngPath, out reason);
             if (image == null) return IntPtr.Zero;
             IntPtr texture = BuildTexture(image, out reason);
             if (texture == IntPtr.Zero) return IntPtr.Zero;
@@ -423,7 +456,10 @@ namespace CustomSong
             for (int i = 0; i < BlendProperties.Length; i++)
             {
                 if (i > 0) before.Append(' ');
-                before.Append(BlendProperties[i]).Append('=').Append(GetFloat(source, BlendProperties[i]));
+                before.Append(BlendProperties[i]).Append('=');
+                before.Append(HasProperty(source, BlendProperties[i])
+                    ? GetFloat(source, BlendProperties[i]).ToString("0.##")
+                    : "-");
             }
 
             if (HasProperty(material, "_Cutoff"))

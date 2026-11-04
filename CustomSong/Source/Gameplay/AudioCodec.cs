@@ -43,6 +43,8 @@ namespace CustomSong
                 return null;
             }
 
+            bytes = OggDemux.VorbisOnly(bytes, out reason);
+            if (bytes == null) return null;
             bytes = SkipTags(bytes);
             if (bytes.Length == 0)
             {
@@ -93,6 +95,21 @@ namespace CustomSong
         internal static int Measure(string path, out string reason)
         {
             reason = null;
+
+            if (string.Equals(Path.GetExtension(path), ".ogg", StringComparison.OrdinalIgnoreCase) &&
+                OggDemux.LooksMuxed(path))
+            {
+                try
+                {
+                    byte[] demuxed = OggDemux.VorbisOnly(File.ReadAllBytes(path), out reason);
+                    return demuxed == null ? -1 : demuxed.Length;
+                }
+                catch (Exception e)
+                {
+                    reason = $"{Path.GetFileName(path)} could not be read: {ModLog.Describe(e)}";
+                    return -1;
+                }
+            }
 
             if (Mp3Decoder.IsMp3(path))
                 return Mp3Decoder.Measure(path, out reason);
