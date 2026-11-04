@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <!-- MelonLoader build of InFalsusNoIotaLimit.
        Build: dotnet build -c Release -p:GameDir="游戏安装目录" -->
@@ -31,7 +31,8 @@
     <GameDir Condition="'$(GameDir)' == ''">$(INFALSUS_GAME_DIR)</GameDir>
   </PropertyGroup>
 
-  <Target Name="RequireGameDir" BeforeTargets="ResolveAssemblyReferences">
+  <Target Name="RequireGameDir" BeforeTargets="ResolveAssemblyReferences"
+          Condition="'$(DesignTimeBuild)' != 'true'">
     <Error Condition="'$(GameDir)' == ''"
            Text="没给游戏安装目录。用 dotnet build -c Release -p:GameDir=&quot;游戏安装目录&quot;，或先设环境变量 INFALSUS_GAME_DIR。" />
   </Target>

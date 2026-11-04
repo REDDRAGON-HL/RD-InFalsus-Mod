@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <!-- 换贴图的小插件：把游戏里已加载的 Texture2D 换成同名 PNG（运行时替换，不动游戏文件）。
        构建：dotnet build -c Release -p:GameDir="游戏安装目录"
@@ -33,7 +33,8 @@
     <GameDir Condition="'$(GameDir)' == ''">$(INFALSUS_GAME_DIR)</GameDir>
   </PropertyGroup>
 
-  <Target Name="RequireGameDir" BeforeTargets="ResolveAssemblyReferences">
+  <Target Name="RequireGameDir" BeforeTargets="ResolveAssemblyReferences"
+          Condition="'$(DesignTimeBuild)' != 'true'">
     <Error Condition="'$(GameDir)' == ''"
            Text="没给游戏安装目录。用 dotnet build -c Release -p:GameDir=&quot;游戏安装目录&quot;，或先设环境变量 INFALSUS_GAME_DIR。" />
   </Target>
