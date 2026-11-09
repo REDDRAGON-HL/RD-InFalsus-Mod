@@ -5,7 +5,7 @@ In Falsus 的 mod，都提供 **MelonLoader** 和 **BepInEx 6 IL2CPP** 构建
 | Mod                        | 作用                               | 版本  | README                                                                                |
 | -------------------------- | ---------------------------------- | ----- | ------------------------------------------------------------------------------------- |
 | **InFalsusScoreCountdown** | 把游玩界面左上角的当前分换成倒扣分 | 3.0.0 | [BepInEx](ScoreCountdown.BepInEx/README.md) · [MelonLoader](ScoreCountdown/REDAME.md) |
-| **InFalsusTextureSwap**    | 运行时替换已加载的立绘             | 1.2.0 | [使用与配置](TextureSwap.BepInEx/README.md) · [做图流程](TextureSwap/README.md)       |
+| **InFalsusTextureSwap**    | 运行时替换立绘 | 1.3.0 | [使用与配置](TextureSwap/README.md)        |
 | **InFalsusNoIotaLimit**    | 取消 1.0.7 的 9999 粒子总数上限    | 1.0.1 | [BepInEx](NoIotaLimit/README.md) · [MelonLoader](NoIotaLimit.Melon/README.md)         |
 | **CustomSong**             | 从 `Charts/` 加载自制曲包，内置AutoPlay          | 1.1.3 | [README](CustomSong/README.md) · [if 文件示例](CustomSong/IF.md)                      |
 
@@ -15,8 +15,7 @@ In Falsus 的 mod，都提供 **MelonLoader** 和 **BepInEx 6 IL2CPP** 构建
 mod/
 ├─ ScoreCountdown/             ScoreCountdown 源码 + MelonLoader 工程
 ├─ ScoreCountdown.BepInEx/     ScoreCountdown 的 BepInEx 工程
-├─ TextureSwap/                TextureSwap 源码 + MelonLoader 工程
-├─ TextureSwap.BepInEx/        TextureSwap 的 BepInEx 工程
+├─ TextureSwap/                替换立绘
 ├─ NoIotaLimit/                NoIotaLimit 源码 + BepInEx 工程
 ├─ NoIotaLimit.Melon/          NoIotaLimit 的 MelonLoader 工程
 ├─ CustomSong/                 自制谱加载器
@@ -30,7 +29,7 @@ mod/
 把 DLL 放进游戏目录的 `Mods/`：
 
 - `InFalsusScoreCountdown.dll`
-- `InFalsusTextureSwap.dll`（另需同目录的 `InFalsusTextureSwap.txt` 和数据文件，见 `TextureSwap/README.md`）
+- `InFalsusTextureSwap.dll`（另需同目录的 `InFalsusTextureSwap.txt` 和压好的数据文件，见 `TextureSwap/README.md`）
 - `InFalsusNoIotaLimit.dll`
 - `CustomSong.dll`（曲包放在 `Charts/`，格式见 `CustomSong/README.md`）
 

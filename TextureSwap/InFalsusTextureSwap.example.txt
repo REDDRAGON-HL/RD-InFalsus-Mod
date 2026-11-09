@@ -1,0 +1,22 @@
+# 配置：一行一条 `贴图名 = 数据文件`
+#
+# 贴图名：
+#   Nia_UIcharacterillust
+#   Mei_UIcharacterillust
+#   Ayame_UIcharacterillust
+#   Iris_UI_characterillust     ← 注意多一个下划线
+#   Story_UIcharacterillust
+#
+# 左边也可以只写角色名（Nia / Mei / Ayame / Iris / Story）。
+#
+# 右边只接受压好的无头数据，后缀决定格式：
+#   .dxt5  → DXT5（Nia / Mei，2048×2048）
+#   .bc7   → BC7 （Ayame / Iris / Story，4096×4096）
+#   .rgba  → RGBA32
+# 数据必须和目标贴图的格式、尺寸一致。`#blank` 表示全透明。
+#
+# 用 png_to_dxt5.exe / png_to_bc7.exe 把 PNG 压成上面的格式。
+#
+# 例子：
+# Nia_UIcharacterillust = nia.dxt5
+# Ayame_UIcharacterillust = ayame.bc7
