@@ -298,6 +298,7 @@ namespace InFalsusTextureSwap
             Texture original;
             try
             {
+                if (!m.HasProperty("_MainTex")) return;
                 original = m.mainTexture;
             }
             catch
