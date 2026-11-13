@@ -45,6 +45,7 @@ namespace CustomSong
             Count(InstallSceneSwitch());
             Count(InstallSelectAwake());
             Count(InstallFont());
+            Count(ClearScore.Install());
             Installed = installed;
             Attempted = attempted;
             ModLog.Load($"{installed}/{attempted} hooks installed");
@@ -138,8 +139,6 @@ namespace CustomSong
             {
                 if (!_alive.Add(name)) return;
             }
-
-            ModLog.Load($"{name} is live");
         }
 
         internal static void Alive(Hook hook) => Alive(Name(hook));

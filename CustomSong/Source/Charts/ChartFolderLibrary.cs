@@ -78,7 +78,6 @@ namespace CustomSong
                 if (Directory.Exists(candidate))
                 {
                     _located = candidate;
-                    ModLog.Load($"{FolderName} folder: {candidate}");
                     return candidate;
                 }
             }
@@ -95,7 +94,6 @@ namespace CustomSong
                 Directory.CreateDirectory(preferred);
                 Directory.CreateDirectory(Path.Combine(preferred, DefaultPack));
                 _located = preferred;
-                ModLog.Load($"{FolderName} folder: {preferred} (created)");
                 return preferred;
             }
             catch (Exception e)

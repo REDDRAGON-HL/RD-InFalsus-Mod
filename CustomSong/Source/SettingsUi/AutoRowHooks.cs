@@ -6,8 +6,8 @@ namespace CustomSong
 {
     internal static unsafe class AutoRowHooks
     {
-        private const int RvaPressed = 0x6D9100;
-        private const int RvaHovered = 0x6D6230;
+        private const int RvaPressed = 0x6D4A40;
+        private const int RvaHovered = 0x6D1B70;
         private const int ClosureIndex = 0x10;
         private const int ClosureRow = 0x18;
 
@@ -69,16 +69,35 @@ namespace CustomSong
         private static void HoverDetour(IntPtr row, IntPtr button, byte entered, IntPtr methodInfo)
         {
             _hoveredTramp?.Invoke(row, button, entered, methodInfo);
+            bool ours;
+            try
+            {
+                ours = AutoRow.Ours(row);
+            }
+            catch (Exception)
+            {
+                return;
+            }
+
+            if (!ours) return;
 
             try
             {
-                if (AutoRow.Ours(row))
-                {
-                    if (entered != 0) AutoRow.Point();
+                AutoRow.Note(entered);
 
-                    if (_hovers++ < 8)
-                        ModLog.Load($"AUTO row: hover {(entered != 0 ? "on " : "off")} {AutoRow.HoverState()}");
+                if (entered != 0)
+                {
+                    ModLog.Load("AUTO row: hover -> describe");
+                    AutoRow.Describe();
                 }
+                else
+                {
+                    ModLog.Load("AUTO row: hover -> conceal");
+                    AutoRow.Conceal();
+                }
+
+                if (_hovers++ < 8)
+                    ModLog.Load($"AUTO row: hover {(entered != 0 ? "on " : "off")} {AutoRow.HoverState()}");
             }
             catch (Exception e)
             {

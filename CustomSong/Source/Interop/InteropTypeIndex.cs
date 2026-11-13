@@ -52,7 +52,6 @@ namespace CustomSong
                 }
             }
 
-            ModLog.Load($"timing: indexed {scanned} interop types in {Timing.Ms(mark):F0} ms");
             return _byName = index;
         }
 
@@ -63,6 +62,7 @@ namespace CustomSong
             if (name.StartsWith("Il2Cpp", StringComparison.Ordinal)) return true;
 
 #if BEPINEX
+
             if (name.StartsWith("Unity", StringComparison.Ordinal)) return false;
             return InteropAssemblyNames().Contains(name);
 #else

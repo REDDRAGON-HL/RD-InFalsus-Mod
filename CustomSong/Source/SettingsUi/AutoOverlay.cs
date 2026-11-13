@@ -47,7 +47,6 @@ namespace CustomSong
             if (!_drawn)
             {
                 _drawn = true;
-                ModLog.Load($"AUTO overlay: drawn at {Screen.width}x{Screen.height}");
             }
 
             if (pressed) AutoSwitch.Toggle();

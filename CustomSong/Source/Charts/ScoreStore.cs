@@ -37,7 +37,8 @@ namespace CustomSong
             long before = ScoreKeys.Refiled;
             ScoreKeys.Migrate(Table);
             if (ScoreKeys.Refiled > before)
-                ModLog.Load($"custom results: {ScoreKeys.Refiled - before} record(s) re-filed");
+            {
+            }
         }
 
         internal static bool IsOurs(IntPtr songInfo)
@@ -157,7 +158,6 @@ namespace CustomSong
                 ScoreKeys.Migrate(table);
                 if (ScoreKeys.Refiled > 0)
                 {
-                    ModLog.Load($"custom results: {ScoreKeys.Refiled} record(s) filed under this build's song ids");
                     Save();
                 }
             }

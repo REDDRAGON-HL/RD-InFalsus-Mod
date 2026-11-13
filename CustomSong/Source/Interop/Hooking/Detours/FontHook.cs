@@ -43,6 +43,11 @@ namespace CustomSong
         {
             Alive(Hook.Font);
 
+            if (_breadcrumbs < 6)
+            {
+                _breadcrumbs++;
+            }
+
             if (!Faulted)
             {
                 try
@@ -59,9 +64,17 @@ namespace CustomSong
                 }
             }
 
-            return _ensureLoadedTramp(result, family, localization, atlasWidth, methodInfo);
+            IntPtr answer = _ensureLoadedTramp(result, family, localization, atlasWidth, methodInfo);
+
+            if (_breadcrumbs < 6)
+            {
+                _breadcrumbs++;
+            }
+
+            return answer;
         }
 
+        private static int _breadcrumbs;
         private static bool _fontReported;
 
         private static void DetachFont()

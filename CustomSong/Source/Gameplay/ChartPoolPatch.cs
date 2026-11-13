@@ -114,7 +114,6 @@ namespace CustomSong
                 }
 
                 patched++;
-                ModLog.Load($"chart pool {entry.Value} -> {room}");
             }
 
             return patched == seen.Count;

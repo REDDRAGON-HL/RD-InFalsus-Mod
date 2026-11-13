@@ -37,6 +37,14 @@ namespace CustomSong
         private static int _c2dOffsetY = 0xE4;
         private static int _c2dSize = 0xC8;
         private static int _c2dType = 0xEC;
+        private static int _c2dText = 0x170;
+        private static int _textFont = 0x20;
+        private static int _textBuffer = 0x118;
+        private static int _textSubmeshes = 0x130;
+        private static int _textScale = 0x13C;
+        private const string OffCaption = "OFF";
+        private const string OnCaption = "ON";
+        private const byte TextType = 4;
         private static delegate* unmanaged[Cdecl]<IntPtr, IntPtr, void> _reset;
         private static delegate* unmanaged[Cdecl]<IntPtr, IntPtr, IntPtr, IntPtr, IntPtr, void> _wire;
         private static delegate* unmanaged[Cdecl]<IntPtr, int, IntPtr, void> _select;
@@ -47,14 +55,17 @@ namespace CustomSong
         private static IntPtr _enabled;
         private static IntPtr _setEnabled;
         private static delegate* unmanaged[Cdecl]<IntPtr, IntPtr, byte, IntPtr, void> _setText;
+        private static delegate* unmanaged[Cdecl]<IntPtr, int, float, IntPtr, void> _showTooltip;
+        private static delegate* unmanaged[Cdecl]<IntPtr, IntPtr, void> _hideTooltip;
+        private static delegate* unmanaged[Cdecl]<IntPtr, IntPtr, void> _layoutTooltip;
         private static IntPtr _panel;
         private static IntPtr _pending;
         private static IntPtr _row;
         private static IntPtr _scroll;
         private static float _bound;
         private static IntPtr _clone;
-        private static int _late;
         private static int _repaint;
+
         private static int _barButtons = 0x28;
         private static bool _resolved;
         private static bool _failed;
@@ -94,8 +105,19 @@ namespace CustomSong
 
         internal static void Tick()
         {
-            if (Present && _late > 0 && --_late == 0) Refresh();
             if (Present && _repaint > 0 && --_repaint == 0) Apply();
+
+            if (Present && _hoverNote != 0)
+            {
+                byte note = _hoverNote;
+                _hoverNote = 0;
+            }
+
+            if (Present && _labelled && _recheck > 0 && --_recheck == 0)
+            {
+                _recheck = RecheckInterval;
+                Verify();
+            }
 
             if (!Present && !_failed && _panel != IntPtr.Zero && _attempts < 4)
             {
@@ -180,9 +202,6 @@ namespace CustomSong
             Memory.WriteI32(row + _barValue, sourceValue > 0 ? sourceValue : 1);
             Memory.WritePtr(row + _barTooltip, Memory.Ptr(source + _barTooltip));
 
-            ModLog.Load($"AUTO row: value {Memory.I32(row + _barValue)} (source {sourceValue}), " +
-                        $"selected={Id(Memory.Ptr(row + _barSelected))}, " +
-                        $"tooltip={Id(Memory.Ptr(row + _barTooltip))}");
             MakeRoom(parent, parent.localPosition.y, pitch);
             if (_wire != null) _wire(row, panel, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
             int registered = Register(clone);
@@ -193,10 +212,7 @@ namespace CustomSong
             }
 
             int synced = Sync(sourceObject.transform, clone.transform);
-            ModLog.Load($"AUTO row: {synced} part(s) took their renderer state from " +
-                        $"'{(sourceObject == null ? "?" : sourceObject.name)}'");
             int dressed = Dress(clone);
-            ModLog.Load($"AUTO row: {dressed} part(s) were given a material");
             Owning(clone, row, sourceObject, panel);
             IntPtr container = Find(parent.gameObject, "Constrained2D");
             if (container != IntPtr.Zero && _touch != null) _touch(container, IntPtr.Zero);
@@ -209,16 +225,13 @@ namespace CustomSong
                 _scroll = scroll;
                 _bound = Memory.F32(scroll + ScrollBound) + step;
                 Stretch();
-                ModLog.Load($"AUTO row: scroll bound {_bound - step:F1} -> {_bound:F1}");
             }
 
             _row = row;
             _clone = created.Pointer;
-            _late = 10;
-            ModLog.Load($"AUTO row: {registered} element(s) in the batch, pitch {pitch:F5}, " +
-                        $"y {anchorY:F3} -> {anchorY + pitch:F3}, " +
-                        $"buttons {(_wire != null ? "wired" : "not wired")}");
-            Dump(source, anchor, clone);
+            _labelled = false;
+            _written.Clear();
+
             return true;
         }
 
@@ -235,8 +248,6 @@ namespace CustomSong
                 float theirs = above == IntPtr.Zero ? 0f : Memory.F32(above + _c2dOffsetY);
                 float gap = mine - theirs;
 
-                ModLog.Load($"AUTO row: pitch from '{(previous == null ? "?" : previous.gameObject.name)}': " +
-                            $"offsetY {theirs:F4} -> {mine:F4} (gap {gap:F4})");
                 if (above != IntPtr.Zero && gap != 0f) return gap;
             }
 
@@ -258,8 +269,6 @@ namespace CustomSong
                 Memory.WriteF32(c2d + _c2dOffsetY, Memory.F32(c2d + _c2dOffsetY) + pitch);
                 moved++;
             }
-
-            if (moved > 0) ModLog.Load($"AUTO row: {moved} section(s) moved by {pitch:F5}");
         }
 
         private static int Register(GameObject clone)
@@ -296,13 +305,6 @@ namespace CustomSong
                 if (live.Contains(c2d)) found++;
             }
 
-            ModLog.Load($"AUTO row: {c2ds.Count} component(s), placed {placed}, queued {queued}, " +
-                        $"in batch {found}, with id {ids}, " +
-                        $"slots {Memory.I32(statics + BatchMainCount)}" +
-                        $"/{Memory.I32(statics + BatchOtherCount)}, " +
-                        $"arrays {ArrayLength(Memory.Ptr(statics + BatchMain))}" +
-                        $"/{ArrayLength(Memory.Ptr(statics + BatchOther))}, " +
-                        $"restored {off.Count}, enabled {asleep.Count}");
             Restore(off);
             Recompute();
             return found;
@@ -373,6 +375,7 @@ namespace CustomSong
             for (int i = off.Count - 1; i >= 0; i--)
             {
                 if (!Memory.LooksLikeObject(off[i])) continue;
+                if (_hovered && Holds(Memory.Ptr(_row + _barSelected), off[i])) continue;
 
                 try
                 {
@@ -382,6 +385,27 @@ namespace CustomSong
                 {
                 }
             }
+        }
+
+        private static bool Holds(IntPtr c2d, IntPtr go)
+        {
+            if (!Memory.LooksLikeObject(c2d) || !Memory.LooksLikeObject(go)) return false;
+
+            try
+            {
+                GameObject root = new Component(c2d).gameObject;
+                if (root == null) return false;
+                Transform wanted = new GameObject(go).transform;
+                if (wanted == null) return false;
+
+                for (Transform at = wanted; at != null; at = at.parent)
+                    if (at.gameObject.Pointer == root.Pointer) return true;
+            }
+            catch (Exception)
+            {
+            }
+
+            return false;
         }
 
         private static void Each(Transform parent, Action<Transform> visit)
@@ -489,6 +513,8 @@ namespace CustomSong
                     _applied = true;
                     ModLog.Load($"AUTO row: shown {(AutoSwitch.On ? "on" : "off")}");
                 }
+
+                Label();
             }
             catch (Exception e)
             {
@@ -540,15 +566,10 @@ namespace CustomSong
 
                 if (moved) Memory.WritePtr(row + _barButtons, fresh);
 
-                ModLog.Load($"AUTO row: {length} button(s), {inside} of this row's, {wired} wired" +
-                            $"{(moved ? ", list rebuilt" : "")}");
-
                 for (int i = 0; i < length; i++)
                 {
                     IntPtr button = Memory.Ptr(Memory.Ptr(row + _barButtons) +
                                                Offsets.Runtime.ArrayDataOffset + i * IntPtr.Size);
-                    ModLog.Load($"AUTO row:   button {i} '{Name(button)}' " +
-                                $"callback={(Memory.LooksLikeObject(Memory.Ptr(button + 0x30)) ? "yes" : "no")}");
                 }
 
                 if (moved && _wire != null) _wire(row, panel, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
@@ -605,30 +626,6 @@ namespace CustomSong
             return created;
         }
 
-        private static void Refresh()
-        {
-            if (!Present || !Memory.LooksLikeObject(_clone)) return;
-
-            try
-            {
-                GameObject clone = new GameObject(_clone);
-                int queued = 0;
-                foreach (IntPtr c2d in C2Ds(clone))
-                {
-                    _reset(c2d, IntPtr.Zero);
-                    queued++;
-                }
-
-                Recompute();
-                ModLog.Load($"AUTO row: {queued} part(s) registered again");
-            }
-            catch (Exception e)
-            {
-                ModLog.WarnRelease("AUTO row: the row could not be registered again: " +
-                                   ModLog.Describe(e));
-            }
-        }
-
         private static int Dress(GameObject clone)
         {
             Material spare = null;
@@ -660,6 +657,8 @@ namespace CustomSong
 
             return dressed;
         }
+
+        private static int Count(Material[] array) => array == null ? 0 : array.Length;
 
         private static Material MaterialOf(IntPtr c2d)
         {
@@ -732,6 +731,21 @@ namespace CustomSong
         {
             var taken = new System.Text.StringBuilder();
 
+            if (Memory.U8(to + _c2dType) == TextType)
+            {
+                try
+                {
+                    Buffer.MemoryCopy((void*)(from + _c2dSize), (void*)(to + _c2dSize), 0x10, 0x10);
+                    taken.Append($" rect({Memory.F32(to + _c2dSize):F3}x" +
+                                 $"{Memory.F32(to + _c2dSize + 4):F3}," +
+                                 $"n{Memory.F32(to + _c2dSize + 8):F3}x" +
+                                 $"{Memory.F32(to + _c2dSize + 12):F3})");
+                }
+                catch (Exception)
+                {
+                }
+            }
+
             try
             {
                 IntPtr source = Memory.Ptr(from + 0x160);
@@ -791,6 +805,10 @@ namespace CustomSong
                 {
                     Buffer.MemoryCopy((void*)(theirs + 0x38), (void*)(ours + 0x38), 0x50, 0x50);
                     Memory.WriteF32(ours + 0x88, Memory.F32(theirs + 0x88));
+                    Buffer.MemoryCopy((void*)(theirs + 0x90), (void*)(ours + 0x90), 0x4C, 0x4C);
+                    IntPtr font = Memory.Ptr(theirs + _textFont);
+                    if (Memory.LooksLikeObject(font)) Memory.WritePtr(ours + _textFont, font);
+                    Memory.WriteF64(ours + _textScale, Memory.F64(theirs + _textScale));
                     Memory.WritePtr(ours + 0xE0, Memory.Ptr(theirs + 0xE0));
                     if (!Memory.LooksLikeObject(Memory.Ptr(ours + 0xE8)))
                         Memory.WritePtr(ours + 0xE8, Memory.Ptr(theirs + 0xE8));
@@ -802,18 +820,45 @@ namespace CustomSong
                     IntPtr fromFilter = Memory.Ptr(theirs + 0x110);
                     IntPtr toFilter = Memory.Ptr(ours + 0x110);
 
-                    if (!IsTitle(ours) && Memory.LooksLikeObject(fromFilter) &&
-                        Memory.LooksLikeObject(toFilter))
+                    if (Memory.LooksLikeObject(fromFilter) && Memory.LooksLikeObject(toFilter))
                     {
                         Mesh mesh = new MeshFilter(fromFilter).sharedMesh;
                         if (mesh != null)
                         {
                             new MeshFilter(toFilter).sharedMesh = mesh;
-                            share = $"{mesh.vertexCount}v";
+                            share = $"{mesh.vertexCount}v{(IsTitle(ours) ? "!" : "")}";
                         }
                     }
 
-                    taken.Append($" text({Memory.F32(theirs + 0x88):F1}, {share}" +
+                    string materials = "";
+                    try
+                    {
+                        IntPtr fromRenderer = Memory.Ptr(theirs + 0x108);
+                        IntPtr toRenderer = Memory.Ptr(ours + 0x108);
+
+                        if (Memory.LooksLikeObject(fromRenderer) && Memory.LooksLikeObject(toRenderer))
+                        {
+                            var target = new MeshRenderer(toRenderer);
+                            if (Count(target.sharedMaterials) == 0)
+                            {
+                                Material[] array = new MeshRenderer(fromRenderer).sharedMaterials;
+                                if (array != null && array.Length > 0)
+                                {
+                                    target.sharedMaterials = array;
+                                    materials = $", {array.Length} material(s) shared";
+                                }
+                            }
+                            else
+                            {
+                                materials = $", {Count(target.sharedMaterials)} own";
+                            }
+                        }
+                    }
+                    catch (Exception)
+                    {
+                    }
+
+                    taken.Append($" text({Memory.F32(theirs + 0x88):F1}, {share}{materials}" +
                                  $"{(renderer ? "" : ", renderer")}{(filter ? "" : ", filter")})");
                 }
             }
@@ -823,8 +868,6 @@ namespace CustomSong
 
             if (taken.Length == 0) return false;
 
-            ModLog.Load($"AUTO row: part '{Name(to)}' differs from the one it was cloned from:" +
-                        taken);
             return true;
         }
 
@@ -837,47 +880,6 @@ namespace CustomSong
         }
 
         private static IntPtr RowSelf() => Present ? Memory.Ptr(_row + _barSelf) : IntPtr.Zero;
-
-        private static void Dump(IntPtr source, IntPtr anchor, GameObject clone)
-        {
-            try
-            {
-                IntPtr statics = WiStatics();
-                if (statics == IntPtr.Zero) return;
-                ModLog.Load("AUTO row: " + Describe(statics, Memory.Ptr(source + _barSelf), "source"));
-                ModLog.Load("AUTO row: " + Describe(statics, Memory.Ptr(anchor + _barSelf), "anchor"));
-                ModLog.Load("AUTO row: " + Describe(statics, RowSelf(), "ours"));
-                int seen = 0, opaque = 0, masked = 0;
-                foreach (IntPtr c2d in C2Ds(clone))
-                {
-                    bool main;
-                    int slot = Slot(statics, c2d, out main);
-                    if (slot < 0) continue;
-                    IntPtr at = Calc(statics, main, slot);
-                    seen++;
-                    if (Memory.F32(at + 0x10) > 0f) opaque++;
-                    if (Memory.I32(at + 0x34) >= 0) masked++;
-                }
-
-                ModLog.Load($"AUTO row: {seen} element(s) with a slot, {opaque} with opacity, " +
-                            $"{masked} with a mask index");
-                GameObject sourceObject = new Component(source).gameObject;
-                if (sourceObject != null)
-                    ModLog.Load("AUTO row: source parts " + Parts(statics, sourceObject));
-                ModLog.Load("AUTO row: our parts    " + Parts(statics, clone));
-                IntPtr selected = Memory.Ptr(_row + _barSelected);
-                ModLog.Load("AUTO row: selected " + Subtree(selected));
-                ModLog.Load("AUTO row: its own  " + Describe(statics, selected, "selected"));
-                IntPtr live = Part(clone, "rowbacking-default");
-                ModLog.Load("AUTO row: a part that draws " + Wire(live));
-                ModLog.Load("AUTO row: its layout " + Describe(statics, live, "backing"));
-                ModLog.Load("AUTO row: everything " + Subtree(RowSelf()));
-            }
-            catch (Exception e)
-            {
-                ModLog.WarnRelease("AUTO row: the dump failed: " + ModLog.Describe(e));
-            }
-        }
 
         private static string Describe(IntPtr statics, IntPtr c2d, string label)
         {
@@ -896,92 +898,214 @@ namespace CustomSong
 
             return $"{label} '{Name(c2d)}' type={Memory.U8(c2d + _c2dType)} " +
                    $"active={Active(c2d)} id={id} slot={slot} " +
-                   $"offset={Memory.F32(c2d + _c2dOffsetX):F3},{Memory.F32(c2d + _c2dOffsetY):F3} {calc}";
+                   $"offset={Memory.F32(c2d + _c2dOffsetX):F3},{Memory.F32(c2d + _c2dOffsetY):F3} " +
+                   $"size={Memory.F32(c2d + _c2dSize):F3},{Memory.F32(c2d + _c2dSize + 4):F3} " +
+                   $"norm={Memory.F32(c2d + _c2dSize + 8):F3},{Memory.F32(c2d + _c2dSize + 12):F3} {calc}";
         }
 
-        private static string Parts(IntPtr statics, GameObject row)
+        private static void Label()
         {
-            var text = new System.Text.StringBuilder("[");
-            int shown = 0;
+            if (!Present || _labelled) return;
 
-            foreach (IntPtr c2d in C2Ds(row))
+            if (_setTextParameters == IntPtr.Zero)
             {
-                if (Memory.U16(c2d + _c2dId) == 0xFFFF) continue;
-                bool main;
-                int slot = Slot(statics, c2d, out main);
-                if (slot < 0) continue;
-                IntPtr at = Calc(statics, main, slot);
-                text.Append($"{Name(c2d)} {Memory.F32(at):F0}x{Memory.F32(at + 4):F0}" +
-                            $"@{Memory.F32(at + 8):F2},{Memory.F32(at + 12):F2} " +
-                            $"{State(c2d)} {Glyphs(c2d)}; ");
-                if (++shown >= 10) break;
+                ModLog.WarnRelease("AUTO row: the text parameters setter was not resolved; " +
+                                   "the row has no words");
+                return;
             }
 
-            return text.Append(']').ToString();
+            _labelled = true;
+            int written = 0;
+            written += WriteTitle();
+            written += WriteCaptions();
+            ModLog.Load($"AUTO row: {written} word(s) written");
         }
 
-        private static string Glyphs(IntPtr c2d)
+        private static bool _labelled;
+
+        private static int WriteTitle()
         {
-            IntPtr text = Memory.Ptr(c2d + 0x170);
-            if (!Memory.LooksLikeObject(text)) return "tv-";
-            IntPtr filter = Memory.Ptr(text + 0x110);
-            if (!Memory.LooksLikeObject(filter)) return "tv0";
-
-            try
+            int written = 0;
+            IntPtr array = Memory.Ptr(_row + _barTitle);
+            if (Memory.LooksLikeObject(array))
             {
-                Mesh mesh = new MeshFilter(filter).sharedMesh;
-                return mesh == null ? "tv-" : $"tv{mesh.vertexCount}";
-            }
-            catch (Exception)
-            {
-                return "tv?";
-            }
-        }
-
-        private static string State(IntPtr c2d)
-        {
-            string enabled = "?";
-            string material = "?";
-            string vertices = "?";
-            string scale = "?";
-            string visible = "?";
-
-            try
-            {
-                IntPtr renderer = Memory.Ptr(c2d + 0x160);
-                if (Memory.LooksLikeObject(renderer) && ClassName(renderer) == "MeshRenderer")
+                int length = ArrayLength(array);
+                if (length > 0 && length <= 32)
                 {
-                    var drawn = new MeshRenderer(renderer);
-                    enabled = drawn.enabled ? "1" : "0";
-                    material = drawn.sharedMaterial == null ? "0" : "1";
-                    visible = drawn.isVisible ? "1" : "0";
-                    Transform transform = drawn.transform;
-                    if (transform != null)
-                    {
-                        Vector3 local = transform.localScale;
-                        Vector3 world = transform.position;
-                        scale = $"{local.x:F4},{local.y:F4} w{world.x:F3},{world.y:F3}";
-                    }
+                    for (int i = 0; i < length; i++)
+                        written += Write(Memory.Ptr(array + Offsets.Runtime.ArrayDataOffset + i * IntPtr.Size),
+                                         Title);
+                }
+            }
+
+            foreach (IntPtr text in Texts())
+            {
+                if (Name(text).IndexOf("TitleText", StringComparison.Ordinal) < 0) continue;
+                written += Write(text, Title);
+            }
+
+            return written;
+        }
+
+        private static unsafe int Write(IntPtr text, string words)
+        {
+            if (!Memory.LooksLikeObject(text)) return 0;
+            if (!_written.Add(text)) return 0;
+            IntPtr created = NewString(words);
+            if (created == IntPtr.Zero) return 0;
+
+            try
+            {
+                byte* image = stackalloc byte[TextParametersSize];
+                Buffer.MemoryCopy((void*)(text + 0x38), image, TextParametersSize, TextParametersSize);
+                *(int*)(image + TextParamKey) = 0;
+                *(int*)(image + TextParamLayout) = TextLayoutDirect;
+                *(int*)(image + TextParam0Key) = 0;
+                *(int*)(image + TextParam1Key) = 0;
+                for (int i = 0; i < TextParam1Key - TextParamRuntimeString; i += IntPtr.Size)
+                    *(IntPtr*)(image + TextParamRuntimeString + i) = IntPtr.Zero;
+                *(IntPtr*)(image + TextParam0String) = created;
+                *(int*)(image + TextParam0Length) = words.Length;
+                _expected[text] = words;
+                _lastWritten[text] = created;
+                IntPtr* args = stackalloc IntPtr[1];
+                args[0] = (IntPtr)image;
+                Invoke(_setTextParameters, text, args, "text");
+
+                if (Memory.Ptr(text + 0x38 + TextParam0String) != created)
+                    Buffer.MemoryCopy(image, (void*)(text + 0x38), TextParametersSize, TextParametersSize);
+                Memory.WriteI32(text + 0xF0, Memory.I32(text + 0xF0) | TextDirtyMesh);
+                Memory.WritePtr(text + _textBuffer, IntPtr.Zero);
+                if (_processDirty != IntPtr.Zero) Invoke(_processDirty, text, null, "dirty pass");
+                GameObject host = new Component(text).gameObject;
+                if (host != null && host.activeSelf)
+                {
+                    host.SetActive(false);
+                    host.SetActive(true);
+                }
+
+                return 1;
+            }
+            catch (Exception e)
+            {
+                ModLog.WarnRelease("AUTO row: a word could not be written: " + ModLog.Describe(e));
+                return 0;
+            }
+        }
+
+        private const int TextParametersSize = 0x50;
+        private const int TextParamKey = 0x00;
+        private const int TextParamLayout = 0x04;
+        private const int TextParam0Length = 0x08;
+        private const int TextParam0String = 0x10;
+        private const int TextParam0Key = 0x18;
+        private const int TextParamRuntimeString = 0x20;
+        private const int TextParam1Key = 0x48;
+        private const int TextLayoutDirect = 4;
+        private const int TextDirtyMesh = 8 | 16 | 1;
+        private static IntPtr _setTextParameters;
+        private static IntPtr _processDirty;
+        private static readonly HashSet<IntPtr> _written = new HashSet<IntPtr>();
+        private const int RecheckInterval = 60;
+        private static int _recheck = RecheckInterval;
+        private static readonly Dictionary<IntPtr, string> _expected = new Dictionary<IntPtr, string>();
+
+        private static void Verify()
+        {
+            if (!Present) return;
+
+            try
+            {
+                int rewrote = 0;
+
+                foreach (IntPtr text in Texts())
+                {
+                    if (!_expected.TryGetValue(text, out string wanted)) continue;
+                    if (!Memory.LooksLikeObject(text)) continue;
+                    IntPtr held = Memory.Ptr(text + 0x38 + TextParam0String);
+                    if (held == _lastWritten[text] && Memory.I32(text + 0x38 + TextParamLayout) == TextLayoutDirect)
+                        continue;
+                    _written.Remove(text);
+                    rewrote += Write(text, wanted);
+                }
+            }
+            catch (Exception e)
+            {
+                ModLog.Warn("AUTO row: the words could not be checked: " + ModLog.Describe(e));
+            }
+        }
+
+        private static readonly Dictionary<IntPtr, IntPtr> _lastWritten = new Dictionary<IntPtr, IntPtr>();
+
+        private static unsafe void Invoke(IntPtr method, IntPtr instance, IntPtr* args, string what)
+        {
+            if (method == IntPtr.Zero) return;
+            IntPtr raised = IntPtr.Zero;
+            Il2CppInterop.Runtime.IL2CPP.il2cpp_runtime_invoke(method, instance, (void**)args, ref raised);
+            if (raised == IntPtr.Zero) return;
+            ModLog.WarnRelease($"AUTO row: the {what} call raised " + Name(raised));
+        }
+
+        private static unsafe IntPtr NewString(string words)
+        {
+            if (words == null) words = string.Empty;
+
+            try
+            {
+                fixed (char* characters = words)
+                {
+                    IntPtr created = Il2CppInterop.Runtime.IL2CPP.il2cpp_string_new_utf16(
+                        characters, words.Length);
+                    if (created != IntPtr.Zero) return created;
                 }
             }
             catch (Exception)
             {
             }
 
-            try
+            return Il2CppInterop.Runtime.IL2CPP.ManagedStringToIl2Cpp(words);
+        }
+
+        private static int WriteCaptions()
+        {
+            IntPtr buttons = Memory.Ptr(_row + _barButtons);
+            int length = ArrayLength(buttons);
+            if (length <= 0) return 0;
+            int written = 0;
+            for (int i = 0; i < length; i++)
             {
-                IntPtr filter = Memory.Ptr(c2d + 0x168);
-                if (Memory.LooksLikeObject(filter) && ClassName(filter) == "MeshFilter")
-                {
-                    Mesh mesh = new MeshFilter(filter).sharedMesh;
-                    vertices = mesh == null ? "0" : mesh.vertexCount.ToString();
-                }
-            }
-            catch (Exception)
-            {
+                IntPtr button = Memory.Ptr(buttons + Offsets.Runtime.ArrayDataOffset + i * IntPtr.Size);
+                if (!Memory.LooksLikeObject(button)) continue;
+                GameObject go = new Component(button).gameObject;
+                if (go == null) continue;
+
+                foreach (IntPtr text in Texts(go))
+                    written += Write(text, i == 0 ? OffCaption : OnCaption);
             }
 
-            return $"e{enabled}/m{material}/v{vertices}/s{scale}/vis{visible}/a{Memory.F32(c2d + 0x108):F2}";
+            return written;
+        }
+
+        private static List<IntPtr> Texts()
+        {
+            var found = new List<IntPtr>();
+            if (!Memory.LooksLikeObject(_clone)) return found;
+            return Texts(new GameObject(_clone));
+        }
+
+        private static List<IntPtr> Texts(GameObject root)
+        {
+            var found = new List<IntPtr>();
+            if (root == null) return found;
+
+            foreach (IntPtr c2d in C2Ds(root))
+            {
+                if (Memory.U8(c2d + _c2dType) != TextType) continue;
+                IntPtr text = Memory.Ptr(c2d + _c2dText);
+                if (Memory.LooksLikeObject(text)) found.Add(text);
+            }
+
+            return found;
         }
 
         private static IntPtr Calc(IntPtr statics, bool main, int slot) =>
@@ -1035,54 +1159,6 @@ namespace CustomSong
             return IntPtr.Zero;
         }
 
-        private static string Subtree(IntPtr c2d)
-        {
-            if (!Memory.LooksLikeObject(c2d)) return "none";
-            var text = new System.Text.StringBuilder("[");
-            IntPtr statics = WiStatics();
-
-            try
-            {
-                GameObject root = new Component(c2d).gameObject;
-                if (root != null)
-                {
-                    foreach (IntPtr part in C2Ds(root))
-                    {
-                        bool main = true;
-                        int slot = statics == IntPtr.Zero ? -1 : Slot(statics, part, out main);
-                        if (slot < 0)
-                        {
-                            text.Append($"{Name(part)}[{Id(part)} noslot] ");
-                            continue;
-                        }
-
-                        IntPtr at = Calc(statics, main, slot);
-                        text.Append($"{Name(part)}[{Id(part)} {State(part)} " +
-                                    $"{Memory.F32(at):F0}x{Memory.F32(at + 4):F0}" +
-                                    $"@{Memory.F32(at + 8):F2},{Memory.F32(at + 12):F2}" +
-                                    $" m{Memory.I32(at + 0x34)} d{Memory.I32(at + 0x38)} " +
-                                    $"{Wire(part)}] ");
-                    }
-                }
-            }
-            catch (Exception)
-            {
-            }
-
-            return text.Append(']').ToString();
-        }
-
-        private static string Wire(IntPtr c2d)
-        {
-            int id = Memory.U16(c2d + _c2dId);
-            IntPtr statics = WiStatics();
-
-            return $"mesh{(Memory.LooksLikeObject(Memory.Ptr(c2d + 0x28)) ? "+" : "-")}" +
-                   $" c0={Memory.U8(c2d + 0xC0)} c1={Memory.U8(c2d + 0xC1)} " +
-                   $"type={Memory.U8(c2d + _c2dType)} " +
-                   (statics == IntPtr.Zero ? "" : Bits(statics, id));
-        }
-
         private static string Id(IntPtr c2d)
         {
             if (!Memory.LooksLikeObject(c2d)) return "none";
@@ -1120,18 +1196,68 @@ namespace CustomSong
 
         internal static bool Ours(IntPtr row) => Present && row == _row;
 
-        internal static void Point()
+        internal static void Describe()
+        {
+            if (!Present || !Memory.LooksLikeObject(_panel)) return;
+            IntPtr box = Tooltip();
+            if (box == IntPtr.Zero) return;
+
+            try
+            {
+                IntPtr text = Memory.Ptr(box + 0x28);
+                if (Memory.LooksLikeObject(text) && _setText != null)
+                {
+                    _setText(text, Il2CppInterop.Runtime.IL2CPP.ManagedStringToIl2Cpp(TooltipText), 0,
+                             IntPtr.Zero);
+                    if (_layoutTooltip != null) _layoutTooltip(box, IntPtr.Zero);
+                }
+
+                if (_showTooltip != null) _showTooltip(box, 1, 0f, IntPtr.Zero);
+                Memory.WritePtr(_panel + _panelTooltip, RowSelf());
+            }
+            catch (Exception e)
+            {
+                ModLog.WarnRelease("AUTO row: the description could not be shown: " +
+                                   ModLog.Describe(e));
+            }
+        }
+
+        internal static void Conceal()
         {
             if (!Present || !Memory.LooksLikeObject(_panel)) return;
 
             try
             {
-                Memory.WritePtr(_panel + _panelTooltip, RowSelf());
+                if (Memory.Ptr(_panel + _panelTooltip) != RowSelf()) return;
+                IntPtr box = Tooltip();
+                if (box != IntPtr.Zero && _hideTooltip != null) _hideTooltip(box, IntPtr.Zero);
             }
             catch (Exception e)
             {
-                ModLog.WarnRelease("AUTO row: the tooltip could not be pointed at the row: " +
+                ModLog.WarnRelease("AUTO row: the description could not be put away: " +
                                    ModLog.Describe(e));
+            }
+        }
+
+        private const string TooltipText = "Automatically plays the chart's notes";
+
+        private static IntPtr Tooltip()
+        {
+            try
+            {
+                IntPtr scene = Il2CppInterop.Runtime.IL2CPP.GetIl2CppClass(
+                    "Game.dll", "ifapp.Game.Scenes", "CoreScene");
+                if (scene == IntPtr.Zero) return IntPtr.Zero;
+                IntPtr statics = FieldResolver.Statics(scene);
+                if (statics == IntPtr.Zero) return IntPtr.Zero;
+                IntPtr instance = Memory.Ptr(statics);
+                if (!Memory.LooksLikeObject(instance)) return IntPtr.Zero;
+                IntPtr box = Memory.Ptr(instance + 0x48);
+                return Memory.LooksLikeObject(box) ? box : IntPtr.Zero;
+            }
+            catch (Exception)
+            {
+                return IntPtr.Zero;
             }
         }
 
@@ -1139,21 +1265,23 @@ namespace CustomSong
         {
             if (!Present) return "no row";
 
-            return $"selected={(On(_row + _barSelected) ? "on" : "off")} " +
-                   $"tooltip={(On(_row + _barTooltip) ? "on" : "off")}";
+            return $"selected={Live(_barSelected)} " +
+                   $"tooltip={Live(_barTooltip)} value={Memory.I32(_row + _barValue)}";
         }
 
-        private static bool On(IntPtr c2d)
+        internal static void Note(byte entered)
         {
-            try
-            {
-                GameObject go = new Component(Memory.Ptr(c2d)).gameObject;
-                return go != null && go.activeSelf;
-            }
-            catch (Exception)
-            {
-                return false;
-            }
+            _hoverNote = (byte)(entered != 0 ? 1 : 2);
+            _hovered = entered != 0;
+        }
+
+        private static byte _hoverNote;
+        private static bool _hovered;
+
+        private static string Live(int field)
+        {
+            IntPtr at = Memory.Ptr(_row + field);
+            return !Memory.LooksLikeObject(at) ? "-" : $"0x{at.ToInt64():X}";
         }
 
         internal static string Named(IntPtr component) => Name(component);
@@ -1256,6 +1384,10 @@ namespace CustomSong
             _c2dOffsetX = block + offset;
             _c2dOffsetY = block + offset + sizeof(float);
             _c2dType = block + Named(0x24, "Constrained2DTransform", "type");
+            _textFont = Named(_textFont, "FastText", "fontFamilyAsset");
+            _textBuffer = Named(_textBuffer, "FastText", "charBuffer");
+            _textSubmeshes = Named(_textSubmeshes, "FastText", "lastSubmeshCount");
+            _textScale = Named(_textScale, "FastText", "calculatedC2DScale");
             _reset = (delegate* unmanaged[Cdecl]<IntPtr, IntPtr, void>)Pointer("Constrained2D", "Reset", 0x502110);
             _wire = (delegate* unmanaged[Cdecl]<IntPtr, IntPtr, IntPtr, IntPtr, IntPtr, void>)
                 Pointer("UiSettingsMultiselectorBar", "_yG", 0x6D63B0);
@@ -1266,11 +1398,28 @@ namespace CustomSong
             _recompute = (delegate* unmanaged[Cdecl]<byte, IntPtr, void>)Pointer("_wi", "_ERA", 0x50F100);
             _admit = (delegate* unmanaged[Cdecl]<IntPtr, IntPtr, ushort>)Pointer("_wi", "_bRA", 0x511690);
             _touch = (delegate* unmanaged[Cdecl]<IntPtr, IntPtr, void>)Pointer("Constrained2D", "_qQA", 0x503950);
-            _enabled = MethodResolver.ByName("Behaviour", "get_enabled");
-            _setEnabled = MethodResolver.ByName("Behaviour", "set_enabled");
+            _enabled = NativeEntry("Behaviour", "get_enabled", 0);
+            _setEnabled = NativeEntry("Behaviour", "set_enabled", 1);
+
+            _showTooltip = (delegate* unmanaged[Cdecl]<IntPtr, int, float, IntPtr, void>)
+                Pointer("UiTextToolTip", "_mH", 0x6D8940);
+            _hideTooltip = (delegate* unmanaged[Cdecl]<IntPtr, IntPtr, void>)
+                Pointer("UiTextToolTip", "_MH", 0x6D8740);
+            _layoutTooltip = (delegate* unmanaged[Cdecl]<IntPtr, IntPtr, void>)
+                Pointer("UiTextToolTip", "_LH", 0x6D3CB0);
             IntPtr setText = CustomSong.Auto.AutoResults.StringSetter();
             if (setText != IntPtr.Zero)
                 _setText = (delegate* unmanaged[Cdecl]<IntPtr, IntPtr, byte, IntPtr, void>)setText;
+
+            IntPtr fastText = Il2CppInterop.Runtime.IL2CPP.GetIl2CppClass("FastText.dll", "FastText",
+                                                                         "FastText");
+            if (fastText != IntPtr.Zero)
+            {
+                _setTextParameters = Il2CppInterop.Runtime.IL2CPP.il2cpp_class_get_method_from_name(
+                    fastText, "set_TextParameters", 1);
+                _processDirty = Il2CppInterop.Runtime.IL2CPP.il2cpp_class_get_method_from_name(
+                    fastText, "EnsureDirtyFlagsProcessed", 0);
+            }
 
             if (_reset == null || _recompute == null || _select == null)
             {
@@ -1292,6 +1441,29 @@ namespace CustomSong
             IntPtr target = MethodResolver.ByName(type, method);
             if (target != IntPtr.Zero) return target;
             return GameAssembly.Base == IntPtr.Zero ? IntPtr.Zero : GameAssembly.Base + rva;
+        }
+
+        private static IntPtr NativeEntry(string type, string method, int parameters)
+        {
+            IntPtr klass = Il2CppInterop.Runtime.IL2CPP.GetIl2CppClass("UnityEngine.CoreModule.dll",
+                                                                     "UnityEngine", type);
+            if (klass == IntPtr.Zero)
+            {
+                ModLog.WarnRelease($"AUTO row: UnityEngine.{type} is not in this build, so its " +
+                                   $"{method} cannot be used");
+                return IntPtr.Zero;
+            }
+
+            IntPtr entry = Il2CppInterop.Runtime.IL2CPP.il2cpp_class_get_method_from_name(
+                klass, method, parameters);
+
+            if (entry == IntPtr.Zero)
+            {
+                ModLog.WarnRelease($"AUTO row: UnityEngine.{type}.{method} is not in this build");
+                return IntPtr.Zero;
+            }
+
+            return *(IntPtr*)entry;
         }
     }
 }

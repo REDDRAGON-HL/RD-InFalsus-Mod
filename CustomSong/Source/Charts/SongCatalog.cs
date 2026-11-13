@@ -402,7 +402,6 @@ namespace CustomSong
                 Memory.WritePtr(mine + PackInfoSongs, songIds[i]);
                 packs[i].PackId = packId;
                 CustomPackIds.Add(packId);
-                ModLog.Load($"pack '{packs[i].Name}' id={packId}");
             }
 
             long rest = (long)(oldCount - CustomPackIndex) * PackInfoSize;
@@ -414,7 +413,6 @@ namespace CustomSong
                 IntPtr slot = packsArray + Offsets.Runtime.ArrayDataOffset + i * PackInfoSize;
                 int id = Memory.U16(slot + PackInfoId);
                 string slug = Memory.Text(Memory.Ptr(slot + PackInfoSlug));
-                ModLog.Load($"pack array[{i}] id={id} slug='{slug}'");
             }
 
             return true;
@@ -499,8 +497,6 @@ namespace CustomSong
             WritePreview(songInfo, window);
             if (PreviewShown.TryGetValue(songId, out int shown) && shown == difficulty) return;
             PreviewShown[songId] = difficulty;
-            ModLog.Load($"preview {songId}: difficulty {difficulty} " +
-                        $"{window[0]:F1}..{window[1]:F1}s");
         }
 
         private static void WritePreview(IntPtr songInfo, float[] window)

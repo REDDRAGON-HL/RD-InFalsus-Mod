@@ -9,7 +9,7 @@ namespace CustomSong
 {
     internal static class CustomSongCore
     {
-        internal const string Version = "1.1.4";
+        internal const string Version = "1.1.5";
         private static List<ChartPack> _packs = new List<ChartPack>();
         private static bool _registered;
         private static bool _visualsWaitingLogged;
@@ -90,7 +90,6 @@ namespace CustomSong
                 }
 
                 SongCatalog.CaptureBaseline(_songData, _packData);
-                ModLog.Load(FieldResolver.Stats());
                 RegisterPacks();
                 ScoreStore.Prepare();
                 ScoreStore.ScanResults(_songData);
@@ -150,7 +149,6 @@ namespace CustomSong
                 mark = Timing.Now;
                 string current = Fingerprint(_root);
                 if (current == _fingerprint) return;
-                ModLog.Load($"timing: fingerprint {Timing.Ms(mark):F0} ms");
             }
 
             if (!_registered || _songData == IntPtr.Zero || _packData == IntPtr.Zero)
@@ -274,9 +272,8 @@ namespace CustomSong
                 int applied = PackText.SetPackVisuals(assets, pack.PackId, pack);
 
                 if (first)
-                    ModLog.Load($"pack '{pack.Name}' id={pack.PackId} " +
-                                $"table=0x{assets.ToInt64():X} visuals={applied} " +
-                                $"of {pack.Visuals.Count} drawn");
+                {
+                }
             }
 
             return true;
@@ -434,8 +431,6 @@ namespace CustomSong
             if (!BackgroundCatalog.Add(info, out string backgroundReason))
                 ModLog.Warn($"'{info.Name}' has no background of its own: {backgroundReason}");
 
-            ModLog.Load($"timing: '{info.Name}' charts {charts:F0} ms, jacket {jacket:F0} ms, " +
-                        $"background {Timing.Ms(mark):F0} ms");
             return null;
         }
     }

@@ -28,7 +28,6 @@ namespace CustomSong
 
             _resolved = _textureClass != IntPtr.Zero && _materialClass != IntPtr.Zero &&
                         _shaderClass != IntPtr.Zero && _color32Class != IntPtr.Zero;
-
             return _resolved;
         }
 
@@ -181,8 +180,6 @@ namespace CustomSong
             MakeTransparent(material, sourceMaterial);
 
             Keep(texture, material);
-            ModLog.Load($"pack cover '{Path.GetFileName(path)}': {image.Width}x{image.Height} " +
-                        $"clear={TransparentShare(image.Rgba):P0}");
             return material;
         }
 
@@ -468,7 +465,6 @@ namespace CustomSong
                 SetFloat(material, "_Cutoff", 0.5f);
                 EnableKeyword(material, "_ALPHATEST_ON");
             }
-
         }
 
         private static unsafe bool HasProperty(IntPtr material, string name)

@@ -179,8 +179,6 @@ namespace CustomSong
                 IntPtr array = Replacement(asset, bold);
                 if (array == IntPtr.Zero) continue;
                 Memory.WritePtr(asset + _assetBytes, array);
-                ModLog.Load($"song text: '{identifier}' lacks characters the custom songs use; " +
-                            "its bytes are replaced by the game's own face plus the gap glyphs");
             }
         }
 
@@ -223,7 +221,6 @@ namespace CustomSong
                 return null;
             }
 
-            ModLog.Load($"song text: using the game's vivoSans with {gap.Length} bytes of gap glyphs");
             if (bold) _mergedBold = merged;
             else _mergedRegular = merged;
             return merged;
@@ -275,9 +272,6 @@ namespace CustomSong
                 Scan(Invoke(all, IntPtr.Zero, type), "loaded assets", true);
                 if (!HasExact()) ScanBundles(type);
                 Choose();
-
-                ModLog.Load($"song text: game fonts found (regular={_regularName ?? "none"}, " +
-                            $"bold={_boldName ?? "none"})");
             }
             catch (Exception e)
             {
@@ -404,8 +398,6 @@ namespace CustomSong
             if (report)
             {
                 names.RemoveAll(n => n.IndexOf("vivoSans", StringComparison.OrdinalIgnoreCase) < 0);
-                ModLog.Load($"song text: {count} {source}, vivoSans among them: " +
-                            (names.Count == 0 ? "none" : string.Join(", ", names.ToArray())));
             }
         }
 
@@ -480,7 +472,6 @@ namespace CustomSong
                         continue;
                     }
 
-                    ModLog.Load($"song text: using {path} for characters the game's fonts lack");
                     return bytes;
                 }
                 catch (Exception e)

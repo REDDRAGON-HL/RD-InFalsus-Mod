@@ -212,8 +212,6 @@ namespace CustomSong
             }
 
             byte[] encoded = Icp1Writer.Build(chart, seed);
-            ModLog.Load($"text chart converted: '{seed}' -> {chart.Notes.Count} note(s), " +
-                        $"{chart.Events.Count} event(s)");
             return encoded;
         }
 
@@ -477,7 +475,9 @@ namespace CustomSong
             }
 
             if (skipped > 0)
-                ModLog.Load($"text chart: skipped {skipped} decoration row(s) inside a noinput group");
+            {
+            }
+
             chart.Order();
             chart.RenumberSkyGroups();
             chart.EnsureSpeed();

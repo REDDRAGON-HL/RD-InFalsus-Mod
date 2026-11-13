@@ -42,10 +42,14 @@ namespace CustomSong
                                finalizer: finalizer == null ? null : new HarmonyMethod(finalizer));
                 bool applied = Ours(target);
                 if (applied)
-                    ModLog.Load($"{target.DeclaringType?.Name}.{target.Name} patched (Harmony)");
+                {
+                }
                 else
+                {
                     ModLog.WarnRelease($"{target.DeclaringType?.Name}.{target.Name} was not patched; " +
                                        "Harmony kept no patch of ours");
+                }
+
                 return applied;
             }
             catch (Exception e)

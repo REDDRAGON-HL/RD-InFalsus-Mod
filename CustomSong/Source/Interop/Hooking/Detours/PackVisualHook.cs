@@ -215,7 +215,6 @@ namespace CustomSong
             if (!_saidResume)
             {
                 _saidResume = true;
-                ModLog.Load($"new tags: resume found card=0x{_stripCard.ToInt64():X}");
             }
         }
 
@@ -331,9 +330,6 @@ namespace CustomSong
                                        ModLog.Describe(e));
                 }
             }
-
-            ModLog.Load($"new tags: {count} strips, {custom} custom, {changed} changed, " +
-                        $"results={ScoreStore.ResultCount}");
         }
 
         private static void ApplyStripWindow(IntPtr card)
@@ -358,7 +354,6 @@ namespace CustomSong
             if (!_saidWindow)
             {
                 _saidWindow = true;
-                ModLog.Load($"strip window: {count} strips, first={first}, window={StripWindow}");
             }
 
             for (int i = 0; i < count; i++)
@@ -473,7 +468,6 @@ namespace CustomSong
                 if (text != IntPtr.Zero)
                 {
                     _fontLines++;
-                    ModLog.Load($"card text font: '{gameObject.name}' family={Families(Memory.Ptr(text + 0x20))}");
                 }
 
                 int children = at.childCount;
@@ -520,7 +514,6 @@ namespace CustomSong
         {
             if (_saidCards) return;
             _saidCards = true;
-            ModLog.Load($"song select: the pack list is being built (first card index {index})");
         }
 
         private static bool _saidOutline;
@@ -529,7 +522,6 @@ namespace CustomSong
         {
             if (_saidOutline) return;
             _saidOutline = true;
-            ModLog.Load("song select: the progress list is being built");
         }
 
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
@@ -573,8 +565,11 @@ namespace CustomSong
 
         private static void FillTable(IntPtr assets, string which)
         {
-            if (_cardTables.Add(assets))
-                ModLog.Load($"pack visuals: the {which} card reads a table at 0x{assets.ToInt64():X}");
+            bool first = _cardTables.Add(assets);
+            if (first)
+            {
+            }
+
             CustomSongCore.ApplyVisualsTo(assets);
         }
 
@@ -654,10 +649,6 @@ namespace CustomSong
             if (!ours) _reportedShipped = true;
             IntPtr strips = Memory.Ptr(card + StripsField);
             int count = Memory.LooksLikeObject(strips) ? Memory.I32(strips + Offsets.Runtime.ArrayLength) : -1;
-
-            ModLog.Load($"strip row pack {packId}{(ours ? " (ours)" : "")}: " +
-                        $"strips={count} page={Memory.I32(card + StripPageField)} " +
-                        $"songs={SongCount(model)}");
         }
 
         private static int SongCount(IntPtr model)

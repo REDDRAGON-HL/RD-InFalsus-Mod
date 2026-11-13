@@ -171,7 +171,6 @@ namespace CustomSong
             if (!_saidAwake)
             {
                 _saidAwake = true;
-                ModLog.Load("song select: the page is waking");
             }
 
             try

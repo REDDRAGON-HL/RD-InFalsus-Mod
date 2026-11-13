@@ -47,7 +47,6 @@ namespace CustomSong
                 Buffer.MemoryCopy((void*)shape, (void*)(target + i * stride), stride, stride);
             Memory.WritePtr(packAssets + PackAssetsTable, grown);
             Changes++;
-            ModLog.Load($"pack visual rows: {count} -> {wanted} (shape=row {Math.Min(TemplateRow, count - 1)})");
             return true;
         }
 
@@ -167,8 +166,6 @@ namespace CustomSong
 
                     Built[materialKey] = material;
                     BuiltMaterials.Add(material);
-                    ModLog.Load($"pack {packId} visual {field} off=0x{offset:X} " +
-                                $"src=0x{source.ToInt64():X} mat=0x{material.ToInt64():X}");
                 }
 
                 if (source != material)
@@ -215,8 +212,6 @@ namespace CustomSong
                 int code = Convert.ToInt32(value, CultureInfo.InvariantCulture);
                 string name = method.ReturnType.IsEnum ? Enum.GetName(method.ReturnType, code) : null;
                 int slot = SlotOf(name);
-                ModLog.Load($"pack pictures: the game is showing {name ?? code.ToString()} " +
-                            $"(language slot {slot})");
                 return slot;
             }
             catch (Exception e)
@@ -251,7 +246,6 @@ namespace CustomSong
 
             bool patched = HarmonyHooks.Patch(setter, null,
                 HarmonyHooks.Handler(typeof(PackText), nameof(AfterLanguage)));
-            if (patched) ModLog.Load("pack pictures follow the game's language");
             return patched;
         }
 

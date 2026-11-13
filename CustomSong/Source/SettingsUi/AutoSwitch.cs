@@ -36,7 +36,6 @@ namespace CustomSong
         internal static void Toggle()
         {
             On = !On;
-            ModLog.Load($"AUTO switch: {(On ? "on" : "off")}");
         }
 
         internal static void NoteOpen(string from)
@@ -44,7 +43,6 @@ namespace CustomSong
             bool open = PageIsOpen;
             if (open == _openLogged) return;
             _openLogged = open;
-            ModLog.Load($"AUTO page: settings {(open ? "up" : "gone")} (seen by {from})");
         }
     }
 }

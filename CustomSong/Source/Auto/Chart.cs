@@ -251,7 +251,6 @@ namespace CustomSong.Auto
             for (int i = 0; i < types.Length; i++) if (types[i] > 0) sb.Append($" {i}={types[i]}");
             sb.Append($" | {notes[0].StartMs / 1000.0:F1}s..{notes[notes.Length - 1].StartMs / 1000.0:F1}s");
             sb.Append($" | {records} judgement sets");
-            ModLog.Load(sb.ToString());
         }
     }
 }
