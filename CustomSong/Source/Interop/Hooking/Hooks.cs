@@ -46,6 +46,15 @@ namespace CustomSong
             Count(InstallSelectAwake());
             Count(InstallFont());
             Count(ClearScore.Install());
+
+            WidgetText.Resolve(
+                Il2CppInterop.Runtime.IL2CPP.GetIl2CppClass("FastText.dll", "FastText", "FastText"),
+                Il2CppInterop.Runtime.IL2CPP.GetIl2CppClass("Game.UI.Common.dll", "ifapp.Game.UI.Common",
+                                                           "Constrained2D"));
+            LevelLabelHooks.Install(out int levelsInstalled, out int levelsAttempted);
+            installed += levelsInstalled;
+            attempted += levelsAttempted;
+            Count(Credit.Install());
             Installed = installed;
             Attempted = attempted;
             ModLog.Load($"{installed}/{attempted} hooks installed");
@@ -57,6 +66,7 @@ namespace CustomSong
         {
             HarmonyHooks.Uninstall();
             DetachFont();
+            LevelLabelHooks.Uninstall();
             DetachSceneSwitch();
             DetachPlayGate();
             DetachResultsUnlock();
@@ -139,6 +149,8 @@ namespace CustomSong
             {
                 if (!_alive.Add(name)) return;
             }
+
+            ModLog.Load($"{name} is live");
         }
 
         internal static void Alive(Hook hook) => Alive(Name(hook));

@@ -4,6 +4,14 @@ namespace CustomSong
 {
     internal static unsafe class Raised
     {
+        internal static IntPtr Call(IntPtr method, IntPtr instance, IntPtr* args)
+        {
+            if (method == IntPtr.Zero) return IntPtr.Zero;
+            IntPtr raised = IntPtr.Zero;
+            Il2CppInterop.Runtime.IL2CPP.il2cpp_runtime_invoke(method, instance, (void**)args, ref raised);
+            return raised;
+        }
+
         internal static string Text(IntPtr exception)
         {
             if (exception == IntPtr.Zero) return null;

@@ -94,6 +94,7 @@ namespace CustomSong
             if (!Aligned(chartSlots, charterSlots, levelSlots, out reason)) return false;
             if (!Texts(charterSlots, "charter", out built.Charters, out reason)) return false;
             if (!Levels(levelSlots, "lv", out built.Level, out reason)) return false;
+            built.Special = Specials(root, built.Level);
             if (!ChartFiles(chartSlots, folder, out built.ChartPaths, out built.ChartNames, out built.NoChart,
                             out reason)) return false;
             info = built;
@@ -642,6 +643,31 @@ namespace CustomSong
 
             values = result;
             return true;
+        }
+
+        private static string[] Specials(JsonElement root, int?[] levels)
+        {
+            var result = new string[ChartInfo.Difficulties];
+            if (!root.TryGetProperty("sp", out JsonElement found)) return result;
+            if (found.ValueKind == JsonValueKind.Null) return result;
+            bool array = found.ValueKind == JsonValueKind.Array;
+            int count = array ? Math.Min(found.GetArrayLength(), ChartInfo.Difficulties) : 0;
+
+            for (int i = 0; i < result.Length; i++)
+            {
+                if (levels[i] == null) continue;
+
+                JsonElement item = array
+                    ? (i < count ? found[i] : Null)
+                    : (i == ChartInfo.Difficulties - 1 ? found : Null);
+                string text = null;
+                if (item.ValueKind == JsonValueKind.String) text = item.GetString();
+                else if (item.ValueKind == JsonValueKind.Number) text = item.GetRawText();
+                if (string.IsNullOrWhiteSpace(text)) continue;
+                result[i] = text;
+            }
+
+            return result;
         }
 
         private static bool Whole(JsonElement item, out int value)

@@ -99,6 +99,24 @@ namespace CustomSong
 
         internal static readonly Dictionary<ushort, ChartInfo> ById =
             new Dictionary<ushort, ChartInfo>();
+
+        internal static bool TryByName(string baseName, out ChartInfo info)
+        {
+            info = null;
+            if (string.IsNullOrEmpty(baseName)) return false;
+
+            foreach (KeyValuePair<ushort, ChartInfo> entry in ById)
+            {
+                if (string.Equals(entry.Value.BaseName, baseName, StringComparison.Ordinal))
+                {
+                    info = entry.Value;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private static readonly Dictionary<ushort, int> IllustratorShown = new Dictionary<ushort, int>();
         private static readonly Dictionary<ushort, int> TitleShown = new Dictionary<ushort, int>();
         private static readonly Dictionary<ushort, int> ArtistShown = new Dictionary<ushort, int>();
