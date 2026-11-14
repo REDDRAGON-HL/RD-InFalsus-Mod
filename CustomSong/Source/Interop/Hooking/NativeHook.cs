@@ -15,6 +15,17 @@ namespace CustomSong
                 return *(IntPtr*)(at + 2);
             return IntPtr.Zero;
         }
+
+        internal static bool IsPrologue(IntPtr at)
+        {
+            if (at == IntPtr.Zero) return false;
+            if (JumpTarget(at) != IntPtr.Zero) return false;
+            byte* p = (byte*)at;
+            if (p[0] == 0x55 || p[0] == 0x53 || p[0] == 0x56 || p[0] == 0x57) return true;
+            if (p[0] == 0x48 && p[1] == 0x89) return true;
+            if (p[0] == 0x40 && (p[1] == 0x53 || p[1] == 0x55 || p[1] == 0x56 || p[1] == 0x57)) return true;
+            return false;
+        }
     }
 
     internal sealed unsafe class NativeHook<T> where T : Delegate

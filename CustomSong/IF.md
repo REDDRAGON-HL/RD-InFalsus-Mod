@@ -17,6 +17,27 @@
 }
 ```
 
+### 特殊标级 `sp`（可选）
+
+和 `lv` 并列写 `sp`，该难度显示写入的字符串：
+
+```json
+{
+  "id": "id",
+  "name": "music",
+  "composer": "composer",
+  "song": "music.ogg",
+  "jacket": "jacket.png",
+  "preview_seconds": ["0", "60"],
+  "charter": "charter",
+  "chart": "chart.spc",
+  "lv": [null, null, null, 15],
+  "sp": [null, null, null, "?"]
+}
+```
+
+- **只有该难度的 `lv` 不是 `null` 时 `sp` 才生效**
+
 ### 差分拓展
 ```json
 {

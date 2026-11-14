@@ -26,6 +26,7 @@ namespace CustomSong
         internal bool[] NoChart;
         internal string[] Charters;
         internal int?[] Level;
+        internal string[] Special;
         internal string FolderName;
         internal string BaseName;
     }

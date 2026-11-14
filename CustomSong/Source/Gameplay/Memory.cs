@@ -19,6 +19,7 @@ namespace CustomSong
         internal static void WritePtr(IntPtr p, IntPtr v) => *(IntPtr*)p = v;
         internal static void WriteU8(IntPtr p, byte v) => *(byte*)p = v;
         internal static void WriteU16(IntPtr p, ushort v) => *(ushort*)p = v;
+        internal static void WriteI16(IntPtr p, short v) => *(short*)p = v;
 
         internal static bool LooksLikeObject(IntPtr p)
         {
@@ -26,6 +27,22 @@ namespace CustomSong
             long v = p.ToInt64();
             if ((v & 7) != 0) return false;
             return v > 0x10000 && v < 0x7FFFFFFFFFFF;
+        }
+
+        internal static string ClassName(IntPtr obj)
+        {
+            if (!LooksLikeObject(obj)) return null;
+
+            try
+            {
+                IntPtr klass = Ptr(obj);
+                if (klass == IntPtr.Zero) return null;
+                return Il2CppInterop.Runtime.IL2CPP.il2cpp_class_get_name_(klass);
+            }
+            catch (Exception)
+            {
+                return null;
+            }
         }
 
         internal static string Text(IntPtr s, int limit = 256)

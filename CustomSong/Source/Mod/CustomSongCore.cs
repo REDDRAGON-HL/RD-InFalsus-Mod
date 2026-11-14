@@ -75,6 +75,7 @@ namespace CustomSong
             VideoBackground.Follow();
             AutoSwitch.NoteOpen("frame");
             AutoRow.Tick();
+            LevelLabelHooks.Check();
             Hooks.TickStripWindow();
             Auto.AutoResults.Poll();
 
