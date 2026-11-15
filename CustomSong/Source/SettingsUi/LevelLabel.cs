@@ -55,7 +55,6 @@ namespace CustomSong
             string line = $"{place}: {id} [{Name(index)}] -> '{label}'";
             if (line == _said) return;
             _said = line;
-            ModLog.Load(line);
         }
 
         private static string Name(int index) => index switch
@@ -100,6 +99,38 @@ namespace CustomSong
             string label = info.Special?[index];
             return string.IsNullOrEmpty(label) ? null : label;
         }
+
+        internal static void PackCard(IntPtr card, IntPtr current)
+        {
+            if (!Memory.LooksLikeObject(card) || !Memory.LooksLikeObject(current)) return;
+            if (!ResolveViewModel()) return;
+            string id = Memory.Text(Memory.Ptr(current + _viewModelSong + Offsets.Song.BaseName), 128);
+            int index = IndexOf(Memory.U8(current + _viewModelDifficulty));
+            string label = LabelOf(id, index, out int rating);
+            IntPtr node = Memory.Ptr(card + PackCardRating);
+            if (!Memory.LooksLikeObject(node)) return;
+            IntPtr text = Memory.Ptr(node + WidgetText.ConstrainedText);
+            if (!Memory.LooksLikeObject(text)) return;
+            NoteLevelFamily(text);
+
+            if (label == null)
+            {
+                WidgetText.RestoreNode(node, rating);
+                return;
+            }
+
+            ConsiderDonor(FirstText(Memory.Ptr(card + PackCardNames), true));
+            Dress(text, label);
+
+            if (WidgetText.Write(text, label) != IntPtr.Zero)
+            {
+                WidgetText.Relayout(node);
+                Say("pack card", id, index, label);
+            }
+        }
+
+        private const int PackCardRating = 0x38;
+        private const int PackCardNames = 0x80;
 
         internal static void Card(IntPtr card, IntPtr current)
         {

@@ -87,17 +87,16 @@ namespace CustomSong
 
                 if (entered != 0)
                 {
-                    ModLog.Load("AUTO row: hover -> describe");
                     AutoRow.Describe();
                 }
                 else
                 {
-                    ModLog.Load("AUTO row: hover -> conceal");
                     AutoRow.Conceal();
                 }
 
                 if (_hovers++ < 8)
-                    ModLog.Load($"AUTO row: hover {(entered != 0 ? "on " : "off")} {AutoRow.HoverState()}");
+                {
+                }
             }
             catch (Exception e)
             {
@@ -115,7 +114,8 @@ namespace CustomSong
                     int index = Memory.I32(closure + ClosureIndex);
 
                     if (AutoRow.Choose(Memory.Ptr(closure + ClosureRow), index))
-                        ModLog.Load($"AUTO switch: {(index != 0 ? "on" : "off")} (pressed)");
+                    {
+                    }
                 }
             }
             catch (Exception e)

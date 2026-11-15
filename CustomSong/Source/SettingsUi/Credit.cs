@@ -21,9 +21,27 @@ namespace CustomSong
         private const int ChartStride = 0x30;
         private const int ChartDesigner = 0x10;
         private const string CloneName = "ChartDesignerContainer";
-        private const string Caption = "谱面设计";
-        private const string OriginalCaption = "插画师";
+
+        private static readonly string[] Captions =
+        {
+            "谱面设计",
+            "譜面設計",
+            "Chart Design",
+            "譜面デザイン",
+            "채보 디자인",
+        };
+
+        private static readonly string[] IllustratorCaptions =
+        {
+            "插画师",
+            "插畫師",
+            "Illustrator",
+            "イラスト",
+            "일러스트",
+        };
         private const string None = "-";
+        private static string Caption() => Captions[PackText.Language()];
+        private static string IllustratorCaption() => IllustratorCaptions[PackText.Language()];
         private const float MirrorShift = 15f;
         private static IntPtr _clone;
         private static IntPtr[] _texts;
@@ -38,6 +56,7 @@ namespace CustomSong
         {
             if (LevelLabelHooks.WatchesTransition)
             {
+                ModLog.Load("chart credit: the transition's refresh is watched");
                 return true;
             }
 
@@ -56,9 +75,7 @@ namespace CustomSong
                 if (!Memory.LooksLikeObject(block)) return;
                 int index = SongCatalog.DifficultyIndexOf(difficulty);
                 if (index < 0) return;
-                ModLog.Load("chart credit: transition: relabel");
                 Relabel(block);
-                ModLog.Load("chart credit: transition: clone");
                 IntPtr copy = Clone(block);
                 if (copy == IntPtr.Zero) return;
 
@@ -68,7 +85,6 @@ namespace CustomSong
                     Collect(new GameObject(copy).transform, found);
                     _texts = found.ToArray();
                     _textsOwner = copy;
-                    ModLog.Load($"chart credit: the copy has {_texts.Length} text node(s)");
                     if (_texts.Length < 2) return;
                 }
 
@@ -110,9 +126,6 @@ namespace CustomSong
                 copy.name = CloneName;
                 _underRow = under;
                 _mirrored = false;
-
-                ModLog.Load($"chart credit: the row was built {(_underRow ? "under" : "beside")} " +
-                            "the game's own");
             }
 
             _clone = copy.Pointer;
@@ -236,22 +249,28 @@ namespace CustomSong
             if (row == null) return;
             IntPtr text = FirstText(row);
             if (text == IntPtr.Zero) return;
-            if (WidgetText.Shows(text, OriginalCaption)) return;
+            string caption = IllustratorCaption();
+            if (WidgetText.Shows(text, caption)) return;
             LevelLabel.ReleaseFont(text);
-            SetText(text, OriginalCaption);
+            SetText(text, caption);
         }
 
         private static void Write(string designer)
         {
             if (_texts == null || _texts.Length < 2) return;
-            if (_written == designer) return;
+            string caption = Caption();
+            string wanted = caption + "\n" + designer;
+            if (_written == wanted) return;
             LevelLabel.ReleaseFont(_texts[0]);
             LevelLabel.ReleaseFont(_texts[1]);
-            bool caption = SetText(_texts[0], Caption);
-            bool name = SetText(_texts[1], designer);
-            _written = designer;
-            ModLog.Load($"chart credit: '{Caption}' / '{designer}' " +
-                        $"({(caption && name ? "ok" : "written, one was rebuilt")})");
+            bool drawn = SetText(_texts[0], caption);
+            bool named = SetText(_texts[1], designer);
+            _written = wanted;
+        }
+
+        internal static void Relanguage()
+        {
+            _written = null;
         }
 
         private static bool SetText(IntPtr text, string words)

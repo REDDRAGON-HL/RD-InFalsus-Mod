@@ -217,7 +217,6 @@ namespace CustomSong
                 key[0xA] = flag;
                 _key = key;
                 _aimed = true;
-                ModLog.Load($"clear score: aimed at song {id}, difficulty flag {flag}");
             }
             catch (Exception e)
             {

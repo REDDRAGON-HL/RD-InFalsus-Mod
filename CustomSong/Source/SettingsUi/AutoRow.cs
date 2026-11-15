@@ -147,9 +147,6 @@ namespace CustomSong
                 _panel = panel;
                 _attempts = 0;
                 Apply();
-
-                ModLog.Load($"AUTO row: added below the boss-VFX row " +
-                            $"(id={Memory.U16(RowSelf() + _c2dId)}, {Queued()} pending)");
             }
             catch (Exception e)
             {
@@ -511,7 +508,6 @@ namespace CustomSong
                 if (!_applied)
                 {
                     _applied = true;
-                    ModLog.Load($"AUTO row: shown {(AutoSwitch.On ? "on" : "off")}");
                 }
 
                 Label();
@@ -918,7 +914,6 @@ namespace CustomSong
             int written = 0;
             written += WriteTitle();
             written += WriteCaptions();
-            ModLog.Load($"AUTO row: {written} word(s) written");
         }
 
         private static bool _labelled;

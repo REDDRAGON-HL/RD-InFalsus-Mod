@@ -252,6 +252,7 @@ namespace CustomSong
         private static void AfterLanguage()
         {
             _language = int.MinValue;
+            Credit.Relanguage();
             CustomSongCore.InvalidateVisualTables();
         }
 

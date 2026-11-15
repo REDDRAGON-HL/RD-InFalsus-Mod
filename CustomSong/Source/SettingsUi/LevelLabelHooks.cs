@@ -9,6 +9,7 @@ namespace CustomSong
         private const string Scenes = "ifapp.Game.Scenes";
         private const string SongSelect = "ifapp.Game.Scenes.SongSelect";
         private const string GameUi = "ifapp.Game.Scenes.Game.UI";
+        private const string Pack = "ifapp.Game";
         private const int RvaTransition = 0x47AE10;
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
@@ -28,18 +29,23 @@ namespace CustomSong
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate void TransitionFn(IntPtr self, IntPtr songInfo, byte difficulty, IntPtr result, byte k);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        private delegate void PackCardFn(IntPtr self, IntPtr dataAccess, IntPtr current);
         private static NativeHook<CardFn> _card;
         private static NativeHook<ButtonFn> _button;
         private static NativeHook<HudFn> _hud;
         private static NativeHook<SmallCardFn> _smallCard;
         private static NativeHook<ResultsFn> _results;
         private static NativeHook<TransitionFn> _transition;
+        private static NativeHook<PackCardFn> _packCard;
         private static CardFn _cardTramp;
         private static ButtonFn _buttonTramp;
         private static HudFn _hudTramp;
         private static SmallCardFn _smallCardTramp;
         private static ResultsFn _resultsTramp;
         private static TransitionFn _transitionTramp;
+        private static PackCardFn _packCardTramp;
 
         internal static bool Install(out int installed, out int attempted)
         {
@@ -53,9 +59,11 @@ namespace CustomSong
             Count(InstallHud());
             Count(InstallSmallCard());
             Count(InstallResults());
+            Count(InstallPackCard());
             Count(InstallTransition());
             installed = took;
             attempted = tried;
+            ModLog.Load($"level labels: {took}/{tried} place(s) of the level are watched");
             return took > 0;
         }
 
@@ -66,12 +74,14 @@ namespace CustomSong
             _hud?.Detach();
             _smallCard?.Detach();
             _results?.Detach();
+            _packCard?.Detach();
             _transition?.Detach();
             _card = null;
             _button = null;
             _hud = null;
             _smallCard = null;
             _results = null;
+            _packCard = null;
             _transition = null;
             _entries.Clear();
         }
@@ -142,6 +152,14 @@ namespace CustomSong
             IntPtr target = MethodResolver.ByRuntime("ResultsJacketContainer", "_wm", "Game.dll", Scenes);
             if (!Attach(ref _results, "ResultsJacketContainer._wm", target, (ResultsFn)ResultsDetour)) return false;
             _resultsTramp = _results.Trampoline;
+            return true;
+        }
+
+        private static bool InstallPackCard()
+        {
+            IntPtr target = MethodResolver.ByRuntime("PackSongCardMember", "_pc", "Game.dll", Pack);
+            if (!Attach(ref _packCard, "PackSongCardMember._pc", target, (PackCardFn)PackCardDetour)) return false;
+            _packCardTramp = _packCard.Trampoline;
             return true;
         }
 
@@ -227,6 +245,20 @@ namespace CustomSong
             catch (Exception e)
             {
                 Guard("the results jacket", e);
+            }
+        }
+
+        private static void PackCardDetour(IntPtr self, IntPtr dataAccess, IntPtr current)
+        {
+            _packCardTramp(self, dataAccess, current);
+
+            try
+            {
+                LevelLabel.PackCard(self, current);
+            }
+            catch (Exception e)
+            {
+                Guard("the pack screen card", e);
             }
         }
 
