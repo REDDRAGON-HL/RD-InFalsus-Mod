@@ -13,6 +13,7 @@ namespace CustomSong
         internal string[] ComposerLanguages;
         internal string[][] ComposerSets;
         internal string[] IllustratorLanguages;
+        internal string Copyright;
         internal string[][] IllustratorSets;
         internal string SongPath;
         internal string[] Songs;

@@ -78,6 +78,10 @@ namespace CustomSong
 
             if (!Faces(root, "illust", false, out built.IllustratorLanguages, out built.IllustratorSets, out reason))
                 return false;
+
+            if (root.TryGetProperty("copyright", out JsonElement copyright) &&
+                copyright.ValueKind == JsonValueKind.String)
+                built.Copyright = copyright.GetString();
             if (!Songs(root, folder, out built.Songs, out reason)) return false;
             built.SongPath = built.Songs[0];
             if (!Jackets(root, folder, out built.JacketPaths, out reason)) return false;

@@ -74,6 +74,7 @@ namespace CustomSong
             internal static int TitleReading = Unresolved;
             internal static int ArtistReading = Unresolved;
             internal static int RewardStyle = Unresolved;
+            internal static int Copyright = Unresolved;
         }
 
         internal static class Chart
@@ -117,6 +118,10 @@ namespace CustomSong
             ok &= (Song.TitleReading = FieldResolver.Field("SongInfo", "LocalizationToTitleReadingOverride")) >= 0;
             ok &= (Song.ArtistReading = FieldResolver.Field("SongInfo", "ArtistReadingOverride")) >= 0;
             ok &= (Song.RewardStyle = FieldResolver.Field("SongInfo", "RewardStyle")) >= 0;
+            Song.Copyright = FieldResolver.Field("SongInfo", "Copyright");
+            if (Song.Copyright < 0)
+                ModLog.WarnRelease("the song card's copyright line could not be found in this build; " +
+                                   "custom songs print none there");
             ok &= (Chart.Id = FieldResolver.Field("SongChartInfo", "Id")) >= 0;
             ok &= (Chart.Available = FieldResolver.Field("SongChartInfo", "Available")) >= 0;
             ok &= (Chart.Difficulty = FieldResolver.Field("SongChartInfo", "Difficulty")) >= 0;

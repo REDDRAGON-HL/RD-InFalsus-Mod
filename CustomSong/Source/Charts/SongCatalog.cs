@@ -71,6 +71,7 @@ namespace CustomSong
         private static int SongInfoTitleReading => Offsets.Song.TitleReading;
         private static int SongInfoArtistReading => Offsets.Song.ArtistReading;
         private static int SongInfoRewardStyle => Offsets.Song.RewardStyle;
+        private static int SongInfoCopyright => Offsets.Song.Copyright;
         private const int RewardStyleSupress = 0;
         private static int ChartInfoSize => Offsets.Chart.Size;
         private static int ChartInfoId => Offsets.Chart.Id;
@@ -366,6 +367,9 @@ namespace CustomSong
                     Memory.WriteF32(slot + SongInfoPreviewStart, chart.PreviewStart);
                     Memory.WriteF32(slot + SongInfoPreviewEnd, chart.PreviewEnd);
                     Memory.WriteI32(slot + SongInfoRewardStyle, RewardStyleSupress);
+
+                    if (SongInfoCopyright >= 0)
+                        Memory.WritePtr(slot + SongInfoCopyright, Str(chart.Copyright ?? string.Empty));
                     IntPtr chartInfos = BuildCharts(chartTemplate, chart);
                     Memory.WritePtr(slot + SongInfoCharts, chartInfos);
                     JacketCatalog.RegisterCharts(chartInfos, chart);
