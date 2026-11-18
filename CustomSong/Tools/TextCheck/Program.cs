@@ -62,6 +62,8 @@ internal static class Program
 
             if (note.Flags != 0)
                 text.Append(",\"flags\":").Append(note.Flags);
+            if (note.TimingGroup != 0)
+                text.Append(",\"timingGroup\":").Append(note.TimingGroup);
             if (note.Type == 4)
                 text.Append(",\"flick\":").Append(note.Flick);
             if (note.Type == 5)
@@ -99,6 +101,7 @@ namespace CustomSong
     internal static class ModLog
     {
         internal static void Load(string message) => Console.WriteLine("[log] " + message);
+        internal static void Info(string message) => Console.WriteLine("[info] " + message);
         internal static void WarnRelease(string message) => Console.WriteLine("[warn] " + message);
     }
 }

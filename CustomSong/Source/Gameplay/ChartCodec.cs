@@ -7,6 +7,7 @@ namespace CustomSong
         private static delegate* unmanaged[Cdecl]<IntPtr, IntPtr, IntPtr, IntPtr, IntPtr> _gab;
         private static delegate* unmanaged[Cdecl]<IntPtr, IntPtr, IntPtr> _hab;
         private static int _noteSize;
+        internal static int NoteSize => _noteSize;
         private const int MaxChartMs = 3_600_000;
 
         internal static bool Resolve()
@@ -97,6 +98,11 @@ namespace CustomSong
                 {
                     return false;
                 }
+                if (type == 3)
+                {
+                    continue;
+                }
+
                 if (!IsNoteType(type))
                 {
                     return false;

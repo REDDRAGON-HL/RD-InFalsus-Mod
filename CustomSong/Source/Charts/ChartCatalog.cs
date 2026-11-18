@@ -27,9 +27,13 @@ namespace CustomSong
             string path = info.ChartPaths[difficulty];
             string seed = info.ChartNames[difficulty];
             bool decoded = false;
+            bool fromText = false;
+            byte[] bytes = null;
             try
             {
-                byte[] bytes = File.ReadAllBytes(path);
+                bytes = File.ReadAllBytes(path);
+                fromText = TextChart.LooksJson(bytes) || TextChart.LooksText(bytes);
+                if (!fromText) bytes = Icp1Reader.FlattenDefaultSpeeds(bytes, seed);
                 decoded = ChartCodec.TryDecode(bytes, seed, result, out string reason);
                 if (!decoded) ModLog.Error($"'{info.Name}' difficulty {difficulty}: {reason}");
             }
@@ -40,11 +44,56 @@ namespace CustomSong
             }
 
             if (!decoded && !ChartCodec.Empty(result)) return false;
+
+            if (decoded)
+            {
+                if (!fromText) BinaryReadback.Publish(result, seed, bytes);
+                SceneControl.Reset();
+                SceneDirectives.Activate(seed);
+                AddShowTexts(path);
+            }
+
             int sourceText = SourceTextField();
             if (sourceText >= 0) *(IntPtr*)(result + sourceText) = IntPtr.Zero;
             return true;
         }
 
+        private static void AddShowTexts(string chartPath)
+        {
+            List<ShowTextFile.Line> lines = ShowTextFile.Load(chartPath);
+            if (lines.Count == 0) return;
+            var byId = new Dictionary<long, ShowTextFile.Line>();
+            foreach (ShowTextFile.Line line in lines) byId[line.Id] = line;
+            var rows = new List<SceneDirectives.Text>();
+            foreach (SceneDirectives.Entry entry in SceneDirectives.Current)
+            {
+                if (entry.Kind != SceneDirectives.Kind.ShowText) continue;
+                if (!byId.TryGetValue(entry.Value, out ShowTextFile.Line line)) continue;
+
+                rows.Add(new SceneDirectives.Text
+                {
+                    Value = line.Text,
+                    Start = entry.Time,
+                    End = entry.Time + Math.Max(0, line.Duration),
+                    Size = entry.Size > 0 ? entry.Size : ScaleSize(line.Size),
+                    Side = 3,
+                    X = Math.Clamp(line.X, 0f, 1f),
+                    Y = Math.Clamp(line.Y, 0f, 1f),
+                    Amp = 0f,
+                    Hz = 0f,
+                    Spacing = 0f,
+                    FadeIn = Math.Max(0, line.FadeIn),
+                    FadeOut = Math.Max(0, line.FadeOut),
+                    Fill = line.Color,
+                    Shadow = 0x000000A6,
+                    ShadowPx = 3f,
+                });
+            }
+
+            SceneDirectives.AddTexts(rows);
+        }
+
+        private static float ScaleSize(float size) => size <= 0f ? 40f : size < 16f ? size * 10f : size;
         private static int _sourceTextField = int.MinValue;
 
         private static int SourceTextField()

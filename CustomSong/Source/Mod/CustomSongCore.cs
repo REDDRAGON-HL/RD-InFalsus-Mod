@@ -115,6 +115,8 @@ namespace CustomSong
             Auto.AutoHooks.Install();
             Auto.AutoResults.Install();
             PackText.Install();
+            SceneControl.Install();
+            AudioOffset.Install();
         }
 
         private static bool _hooksInstalled;

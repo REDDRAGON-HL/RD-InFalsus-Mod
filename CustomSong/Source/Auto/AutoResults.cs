@@ -197,6 +197,7 @@ namespace CustomSong.Auto
 
         private static void StartPostfix(Il2CppObjectBase __instance)
         {
+            RetireScene();
             if (!AutoMark.Ran) return;
 
             try
@@ -232,12 +233,25 @@ namespace CustomSong.Auto
             _container = Memory.LooksLikeObject(self) ? self : IntPtr.Zero;
         }
 
+        private static void RetireScene()
+        {
+            try
+            {
+                SceneControl.Retire();
+            }
+            catch (Exception e)
+            {
+                ModLog.Warn("scene rows: the gameplay scene could not be retired: " + ModLog.Describe(e));
+            }
+        }
+
         internal static void Poll()
         {
             if (_decorated) return;
             if (_container == IntPtr.Zero) return;
             IntPtr container = _container;
             _container = IntPtr.Zero;
+            RetireScene();
             if (!AutoMark.Ran) return;
             IntPtr scene = SceneAbove(container);
 

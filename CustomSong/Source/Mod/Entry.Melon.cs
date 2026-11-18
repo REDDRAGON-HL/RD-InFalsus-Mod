@@ -11,7 +11,13 @@ namespace CustomSong
         public override void OnInitializeMelon() => CustomSongCore.Loaded();
         public override void OnLateInitializeMelon() => CustomSongCore.Initialize();
         public override void OnUpdate() => CustomSongCore.Update();
-        public override void OnGUI() => AutoOverlay.Draw();
+
+        public override void OnGUI()
+        {
+            AutoOverlay.Draw();
+            OverlayText.Draw();
+        }
+
         public override void OnDeinitializeMelon() => CustomSongCore.Shutdown();
     }
 }

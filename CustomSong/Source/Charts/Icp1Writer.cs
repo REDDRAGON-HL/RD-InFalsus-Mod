@@ -125,7 +125,7 @@ namespace CustomSong
             for (int i = 0; i < 8; i++) file[at + i] = (byte)(value >> (8 * i));
         }
 
-        private struct State
+        internal struct State
         {
             private ulong _a, _b, _c, _d;
             private uint _count;
@@ -170,12 +170,19 @@ namespace CustomSong
 
             internal void Advance(int[] fields, int[] plains, int index)
             {
-                Finalize((ulong)fields[0], (ulong)fields[1],
-                         ((ulong)(uint)fields[3] << 32) | (uint)fields[2]);
-                Finalize((ulong)fields[4], (ulong)fields[5], Pack(plains[1], plains[0]));
-                Finalize(Pack(plains[3], plains[2]), Pack(plains[5], plains[4]), Pack(plains[7], plains[6]));
-                Record(index, fields[0], Gcd(plains[0], plains[1]), Gcd(plains[2], plains[3]),
-                       Gcd(plains[4], plains[5]), Gcd(plains[6], plains[7]));
+                AdvanceNote((ulong)(uint)fields[0], (ulong)(uint)fields[1], fields[2], fields[3],
+                            (uint)fields[4], (uint)fields[5], plains, plains, index);
+            }
+
+            internal void AdvanceNote(ulong id, ulong line, int start, int end, uint sideType,
+                                      uint flags, int[] fractions, int[] raw, int index)
+            {
+                Finalize(id, line, ((ulong)(uint)end << 32) | (uint)start);
+                Finalize(sideType, flags, Pack(fractions[1], fractions[0]));
+                Finalize(Pack(fractions[3], fractions[2]), Pack(fractions[5], fractions[4]),
+                         Pack(fractions[7], fractions[6]));
+                Record(index, id, Gcd(raw[0], raw[1]), Gcd(raw[2], raw[3]),
+                       Gcd(raw[4], raw[5]), Gcd(raw[6], raw[7]));
             }
 
             private static ulong Pack(int high, int low) =>
@@ -226,7 +233,7 @@ namespace CustomSong
                 _count++;
             }
 
-            private void Record(int index, int field0, int g0, int g1, int g2, int g3)
+            private void Record(int index, ulong field0, int g0, int g1, int g2, int g3)
             {
                 ulong repeated = (uint)index | ((ulong)(uint)index << 32);
                 ulong folded = unchecked(repeated + ((_a + Rol(_b, 9)) ^ (_d + Rol(_c, 23))));

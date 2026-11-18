@@ -18,6 +18,7 @@ namespace CustomSong
             internal const int SpanSize = 0x10;
             internal const int SpanLength = 8;
             internal const int ChartTupleNotes = 0x10;
+            internal const int ChartTupleEvents = 0x18;
 
             internal static class ReadRecord
             {

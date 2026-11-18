@@ -27,7 +27,12 @@ namespace CustomSong
     public sealed class CustomSongTick : MonoBehaviour
     {
         private void Update() => CustomSongCore.Update();
-        private void OnGUI() => AutoOverlay.Draw();
+
+        private void OnGUI()
+        {
+            AutoOverlay.Draw();
+            OverlayText.Draw();
+        }
     }
 }
 #endif

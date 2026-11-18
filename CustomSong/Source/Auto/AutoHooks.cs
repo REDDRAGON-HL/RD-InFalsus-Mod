@@ -190,6 +190,23 @@ namespace CustomSong.Auto
                 }
             }
 
+            try
+            {
+                GroupSpeed.Observe(laneLists);
+
+                if (GroupSpeed.Any)
+                {
+                    if (GroupSpeed.IsRenderPass(laneLists))
+                        GroupSpeed.Apply(lnp, chartTime * 1000.0);
+                    else
+                        GroupSpeed.Restore();
+                }
+            }
+            catch (Exception e)
+            {
+                Fault("_hb", e);
+            }
+
             _hbTramp(lnp, chartTime, trackTime, unitsPerSecond, laneLists, window);
 
             if (!Faulted)

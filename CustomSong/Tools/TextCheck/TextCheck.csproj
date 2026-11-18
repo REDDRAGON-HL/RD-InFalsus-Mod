@@ -11,6 +11,7 @@
   <ItemGroup>
     <Compile Include="Program.cs" />
     <Compile Include="..\..\Source\Charts\TextChart.cs" />
+    <Compile Include="..\..\Source\Charts\SceneDirectives.cs" />
     <Compile Include="..\..\Source\Charts\Json.cs" />
     <Compile Include="..\..\Source\Charts\Icp1Writer.cs" />
   </ItemGroup>

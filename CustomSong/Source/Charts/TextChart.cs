@@ -11,6 +11,10 @@ namespace CustomSong
         internal float Meter = 4f;
         internal readonly List<Note> Notes = new List<Note>();
         internal readonly List<Event> Events = new List<Event>();
+        internal readonly List<Note> NoInput = new List<Note>();
+        internal readonly List<SceneDirectives.SkyVisual> SkyNotes = new List<SceneDirectives.SkyVisual>();
+        internal readonly List<SceneDirectives.Text> Lyrics = new List<SceneDirectives.Text>();
+        internal readonly List<SceneDirectives.Entry> Directives = new List<SceneDirectives.Entry>();
 
         internal struct Note
         {
@@ -23,6 +27,7 @@ namespace CustomSong
             internal int Flick;
             internal int LeftEase;
             internal int RightEase;
+            internal int TimingGroup;
             internal int[] Plains;
         }
 
@@ -44,6 +49,7 @@ namespace CustomSong
         private static readonly int[] LeftEaseBits = { 0x04, 0x08, 0x10 };
         private static readonly int[] RightEaseBits = { 0x20, 0x40, 0x80 };
         private const int BombFlag = 0x8000;
+        private const int SkyNoteFlag = 0x10000;
 
         internal static bool LooksJson(byte[] bytes)
         {
@@ -211,8 +217,185 @@ namespace CustomSong
                 return null;
             }
 
+            DropEmptySkyAreas(chart);
+            BoundFractions(chart);
             byte[] encoded = Icp1Writer.Build(chart, seed);
+            var groups = new Dictionary<long, int>();
+            var skyGroups = new Dictionary<long, long>();
+            for (int i = 0; i < chart.Notes.Count; i++)
+            {
+                Note note = chart.Notes[i];
+                if (note.TimingGroup != 0) groups[i] = note.TimingGroup;
+                if (note.Type == TypeSkyArea) skyGroups[i] = (long)(uint)note.Line;
+            }
+
+            foreach (Event row in chart.Events)
+            {
+                if (row.Type != 0 || !row.HasNumber) continue;
+
+                chart.Directives.Add(new SceneDirectives.Entry
+                {
+                    Kind = SceneDirectives.Kind.GroupSpeed,
+                    Time = row.TimeMs,
+                    Group = 0,
+                    X = (float)row.Number,
+                });
+            }
+
+            var visuals = new List<SceneDirectives.SkyVisual>(chart.NoInput.Count);
+            for (int i = 0; i < chart.NoInput.Count; i++)
+            {
+                Note note = chart.NoInput[i];
+                visuals.Add(new SceneDirectives.SkyVisual
+                {
+                    Id = (1L << 62) | (long)i,
+                    Group = (long)(uint)note.Line,
+                    TimingGroup = note.TimingGroup,
+                    Start = note.Start,
+                    End = note.End,
+                    StartCenter = Fraction(note.Plains, 0),
+                    EndCenter = Fraction(note.Plains, 2),
+                    StartWidth = Fraction(note.Plains, 4),
+                    EndWidth = Fraction(note.Plains, 6),
+                    LeftEase = note.LeftEase,
+                    RightEase = note.RightEase,
+                    NoClip = (note.TimingGroup & 0x40000000) != 0,
+                    PrevLo = 0f, PrevHi = 1f, NextLo = 0f, NextHi = 1f,
+                    IsFirst = true, IsLast = true,
+                });
+            }
+
+            JoinVisuals(visuals);
+            visuals.AddRange(chart.SkyNotes);
+            SceneDirectives.Publish(seed, chart.Directives, groups, skyGroups, visuals, chart.Lyrics);
             return encoded;
+        }
+
+        private static float Fraction(int[] plains, int pair)
+        {
+            int denominator = plains[pair + 1];
+            return denominator == 0 ? 0f : plains[pair] / (float)denominator;
+        }
+
+        private const int JoinToleranceMs = 2;
+
+        internal static void JoinVisuals(List<SceneDirectives.SkyVisual> visuals)
+        {
+            var byGroup = new Dictionary<long, List<int>>();
+            for (int i = 0; i < visuals.Count; i++)
+            {
+                long group = visuals[i].Group;
+                if (!byGroup.TryGetValue(group, out List<int> list))
+                    byGroup[group] = list = new List<int>();
+                list.Add(i);
+            }
+
+            foreach (List<int> list in byGroup.Values)
+            {
+                list.Sort((a, b) =>
+                {
+                    int byTime = visuals[a].Start.CompareTo(visuals[b].Start);
+                    return byTime != 0 ? byTime : a.CompareTo(b);
+                });
+
+                for (int k = 0; k < list.Count; k++)
+                {
+                    int ai = list[k];
+                    SceneDirectives.SkyVisual a = visuals[ai];
+                    int best = -1;
+                    float bestLo = 0f, bestHi = 0f, bestOverlap = -1f;
+
+                    for (int j = 0; j < list.Count; j++)
+                    {
+                        if (j == k) continue;
+                        int bi = list[j];
+                        SceneDirectives.SkyVisual b = visuals[bi];
+                        if (b.Start < a.Start) continue;
+                        if (Math.Abs((long)b.Start - a.End) > JoinToleranceMs) continue;
+                        float aLo = a.EndCenter - a.EndWidth * 0.5f;
+                        float aHi = a.EndCenter + a.EndWidth * 0.5f;
+                        float bLo = b.StartCenter - b.StartWidth * 0.5f;
+                        float bHi = b.StartCenter + b.StartWidth * 0.5f;
+                        float lo = Math.Max(aLo, bLo);
+                        float hi = Math.Min(aHi, bHi);
+                        float overlap = hi - lo;
+                        if (overlap < 0f || overlap <= bestOverlap) continue;
+                        best = bi;
+                        bestLo = lo;
+                        bestHi = hi;
+                        bestOverlap = overlap;
+                    }
+
+                    if (best < 0) continue;
+                    SceneDirectives.SkyVisual next = visuals[best];
+                    next.PrevLo = bestLo; next.PrevHi = bestHi; next.IsFirst = false;
+                    a.NextLo = bestLo; a.NextHi = bestHi; a.IsLast = false;
+                    visuals[ai] = a;
+                    visuals[best] = next;
+                }
+            }
+        }
+
+        private const int ZeroPointSkyAreaMs = 2;
+
+        private static void DropEmptySkyAreas(TextChart chart)
+        {
+            for (int i = chart.Notes.Count - 1; i >= 0; i--)
+            {
+                Note note = chart.Notes[i];
+                if (note.Type != TypeSkyArea || note.End - note.Start > ZeroPointSkyAreaMs) continue;
+                chart.Notes.RemoveAt(i);
+                chart.NoInput.Add(note);
+            }
+        }
+
+        private const int FractionCeiling = 8388607;
+
+        private static void BoundFractions(TextChart chart)
+        {
+            for (int i = 0; i < chart.Notes.Count; i++)
+            {
+                Note note = chart.Notes[i];
+                note.Plains = Bound(note.Plains);
+                chart.Notes[i] = note;
+            }
+        }
+
+        private static int[] Bound(int[] plains)
+        {
+            for (int pair = 0; pair < 4; pair++)
+            {
+                int num = plains[pair * 2];
+                int den = plains[pair * 2 + 1];
+                if (den == 0) continue;
+                long gcd = Gcd(num, den);
+                long reducedNum = num / gcd;
+                long reducedDen = den / gcd;
+                long magnitude = Math.Max(Math.Abs(reducedNum), Math.Abs(reducedDen));
+                if (magnitude <= FractionCeiling) continue;
+                double scale = (double)FractionCeiling / magnitude;
+                long scaledNum = (long)Math.Round(reducedNum * scale);
+                long scaledDen = (long)Math.Round(reducedDen * scale);
+                if (scaledDen == 0) scaledDen = reducedDen < 0 ? -1 : 1;
+                gcd = Gcd(scaledNum, scaledDen);
+                plains[pair * 2] = (int)(scaledNum / gcd);
+                plains[pair * 2 + 1] = (int)(scaledDen / gcd);
+            }
+
+            return plains;
+        }
+
+        private static long Gcd(long a, long b)
+        {
+            a = Math.Abs(a);
+            b = Math.Abs(b);
+            while (b != 0)
+            {
+                long t = a % b;
+                a = b;
+                b = t;
+            }
+            return a == 0 ? 1 : a;
         }
 
         internal static bool TryParse(string text, out TextChart chart, out string reason)
@@ -220,12 +403,31 @@ namespace CustomSong
             chart = new TextChart();
             reason = null;
             var lines = text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+            var groupNames = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            int nextGroup = 0;
+            foreach (string raw in lines)
+            {
+                string header = TimingGroupHeader(raw);
+                if (header != null && Int(header, out int numeric) && numeric > nextGroup)
+                    nextGroup = numeric;
+            }
+            foreach (string raw in lines)
+            {
+                string header = TimingGroupHeader(raw);
+                if (header == null || Int(header, out _)) continue;
+                if (!groupNames.ContainsKey(header)) groupNames[header] = ++nextGroup;
+            }
+
             bool inBlock = false;
             bool blockNoInput = false;
+            bool blockNoClip = false;
+            int currentGroup = 0;
             int skyGroup = 0;
             int lastEnd = int.MinValue;
             bool seenChart = false;
+            bool audioOffsetSeen = false;
             int skipped = 0;
+            var noInputSky = new HashSet<long>();
 
             foreach (string raw in lines)
             {
@@ -236,6 +438,8 @@ namespace CustomSong
                 {
                     inBlock = false;
                     blockNoInput = false;
+                    blockNoClip = false;
+                    currentGroup = 0;
                     continue;
                 }
 
@@ -244,48 +448,63 @@ namespace CustomSong
                 if (open <= 0 || close <= open) continue;
                 string command = line.Substring(0, open).Trim().ToLowerInvariant();
 
+                if (command == "text")
+                {
+                    if (!Lyric(line.Substring(open + 1, close - open - 1), out SceneDirectives.Text row,
+                               out reason))
+                        return false;
+                    chart.Lyrics.Add(row);
+                    continue;
+                }
+
                 if (command == "timinggroup")
                 {
                     string options = line.Substring(open + 1, close - open - 1);
+                    string[] header = options.Split(',');
+                    for (int i = 0; i < header.Length; i++) header[i] = header[i].Trim();
+                    currentGroup = 0;
+                    if (header.Length > 0)
+                    {
+                        if (Int(header[0], out int gid)) currentGroup = gid;
+                        else if (groupNames.TryGetValue(header[0], out int named)) currentGroup = named;
+                    }
+
                     inBlock = true;
-                    blockNoInput = options.IndexOf("noinput", StringComparison.OrdinalIgnoreCase) >= 0;
+                    blockNoClip = options.IndexOf("noclip", StringComparison.OrdinalIgnoreCase) >= 0;
+                    blockNoInput = options.IndexOf("noinput", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                   blockNoClip;
                     continue;
                 }
 
                 string[] args = line.Substring(open + 1, close - open - 1).Split(',');
                 for (int i = 0; i < args.Length; i++) args[i] = args[i].Trim();
 
-                if (command == "hidegroup" || command == "audiooffset" || command == "beam" ||
-                    command == "skyareapack" || command == "packpiece" || command == "showtext" ||
-                    command == "setcolor" || command == "scenecontrol" || command == "skynote" ||
-                    command == "trackmove")
+                if (command == "beam")
                     continue;
 
-                if (inBlock && blockNoInput)
+                if (inBlock && blockNoInput && (command == "track" || command == "bpm"))
                 {
                     if (command == "track" && args.Length >= 2 &&
                         Int(args[0], out int at) && Num(args[1], out double speed))
                     {
-                        chart.Events.Add(new Event { Type = 0, TimeMs = at, Number = speed, HasNumber = true });
-                        skipped++;
+                        if (currentGroup != 0) GroupSpeed(chart, currentGroup, at, speed);
+                        else chart.Events.Add(new Event { Type = 0, TimeMs = at, Number = speed, HasNumber = true });
                     }
                     else if (command == "bpm" && args.Length >= 2 &&
                              Int(args[0], out int beat) && Num(args[1], out double tempo) && chart.Bpm > 0)
                     {
-                        chart.Events.Add(new Event
-                        {
-                            Type = 0, TimeMs = beat, Number = tempo / chart.Bpm, HasNumber = true,
-                        });
-                        skipped++;
-                    }
-                    else
-                    {
-                        skipped++;
+                        if (currentGroup != 0) GroupSpeed(chart, currentGroup, beat, tempo / chart.Bpm);
+                        else
+                            chart.Events.Add(new Event
+                            {
+                                Type = 0, TimeMs = beat, Number = tempo / chart.Bpm, HasNumber = true,
+                            });
                     }
 
                     continue;
                 }
 
+                int notesBefore = chart.Notes.Count;
                 switch (command)
                 {
                     case "chart":
@@ -403,7 +622,24 @@ namespace CustomSong
                             Track = 1,
                             Start = at,
                             End = at,
+                            Flags = SkyNoteFlag,
                             Plains = Pairs(lane, 4, lane, 4, width, 4, width, 4),
+                        });
+
+                        chart.SkyNotes.Add(new SceneDirectives.SkyVisual
+                        {
+                            Id = (1L << 61) | (long)chart.SkyNotes.Count,
+                            Start = at,
+                            End = at + 1,
+                            IsSkyNote = true,
+                            StartCenter = centre / (float)split,
+                            EndCenter = centre / (float)split,
+                            StartWidth = wide / (float)split,
+                            EndWidth = wide / (float)split,
+                            LeftEase = 0x04,
+                            RightEase = 0x20,
+                            PrevLo = 0f, PrevHi = 1f, NextLo = 0f, NextHi = 1f,
+                            IsFirst = true, IsLast = true,
                         });
                         break;
                     }
@@ -413,6 +649,12 @@ namespace CustomSong
                         if (args.Length < 2 ||
                             !Int(args[0], out int at) || !Num(args[1], out double speed))
                             return Fail("track(ms, speed)", out reason);
+
+                        if (currentGroup != 0)
+                        {
+                            GroupSpeed(chart, currentGroup, at, speed);
+                            break;
+                        }
 
                         chart.Events.Add(new Event
                         {
@@ -433,6 +675,12 @@ namespace CustomSong
                         if (args.Length > 2 && !Num(args[2], out beats)) beats = 4.0;
                         int mode = 0;
                         if (args.Length > 3 && Num(args[3], out double parsed)) mode = (int)parsed;
+
+                        if (currentGroup != 0 && chart.Bpm > 0)
+                        {
+                            GroupSpeed(chart, currentGroup, at, tempo / chart.Bpm);
+                            break;
+                        }
 
                         chart.Events.Add(new Event
                         {
@@ -462,9 +710,185 @@ namespace CustomSong
                         break;
                     }
 
+                    case "hidegroup":
+                    {
+                        if (args.Length != 2 ||
+                            !Int(args[0], out int at) || !Int(args[1], out int flag))
+                            return Fail("hidegroup(ms, flag)", out reason);
+                        if (flag != 0 && flag != 1)
+                            return Fail("hidegroup flag 0 or 1", out reason);
+
+                        chart.Directives.Add(new SceneDirectives.Entry
+                        {
+                            Kind = SceneDirectives.Kind.HideGroup,
+                            Time = at,
+                            Group = currentGroup,
+                            Value = flag,
+                        });
+                        break;
+                    }
+
+                    case "noinput":
+                    {
+                        if (args.Length != 1 || !Int(args[0], out int group) || group < 0)
+                            return Fail("noinput(group)", out reason);
+                        noInputSky.Add(group);
+                        break;
+                    }
+
+                    case "setcolor":
+                    {
+                        if (args.Length < 3 || args.Length > 4 ||
+                            !Int(args[0], out int at) || !Int(args[1], out int group))
+                            return Fail("setcolor(ms, group, #RRGGBB[AA][, edgeGlow])", out reason);
+                        if (!Hex(args[2], out uint rgba))
+                            return Fail("setcolor colour #RRGGBB or #RRGGBBAA", out reason);
+                        bool edgeGlow = true;
+                        if (args.Length == 4 && !Flag(args[3], out edgeGlow))
+                            return Fail("setcolor edgeGlow 0/1 or true/false", out reason);
+
+                        chart.Directives.Add(new SceneDirectives.Entry
+                        {
+                            Kind = SceneDirectives.Kind.SetColor,
+                            Time = at,
+                            Group = group,
+                            Rgba = rgba,
+                            EdgeGlow = edgeGlow,
+                        });
+                        break;
+                    }
+
+                    case "scenecontrol":
+                    {
+                        if (args.Length < 2 || !Int(args[0], out int at))
+                            return Fail("scenecontrol(ms, mode, ...)", out reason);
+                        string mode = args[1].Trim().ToLowerInvariant();
+                        if (mode == "trackdisplay")
+                        {
+                            if (args.Length != 4 ||
+                                !Int(args[2], out int duration) || !Int(args[3], out int alpha))
+                                return Fail("scenecontrol(ms, trackdisplay, durationMs, alpha)", out reason);
+                            if (duration < 0 || alpha < 0 || alpha > 255)
+                                return Fail("trackdisplay duration >= 0 and alpha 0..255", out reason);
+
+                            chart.Directives.Add(new SceneDirectives.Entry
+                            {
+                                Kind = SceneDirectives.Kind.TrackDisplay,
+                                Time = at,
+                                Value = duration,
+                                Mode = alpha,
+                            });
+                        }
+                        else if (mode == "hidegroup")
+                        {
+                            if (args.Length != 4 ||
+                                !Int(args[2], out int group) || !Int(args[3], out int flag))
+                                return Fail("scenecontrol(ms, hidegroup, group, flag)", out reason);
+                            if (flag != 0 && flag != 1)
+                                return Fail("hidegroup flag 0 or 1", out reason);
+
+                            chart.Directives.Add(new SceneDirectives.Entry
+                            {
+                                Kind = SceneDirectives.Kind.HideGroup,
+                                Time = at,
+                                Group = group,
+                                Value = flag,
+                            });
+                        }
+                        else
+                        {
+                            return Fail($"scenecontrol mode '{mode}' (trackdisplay or hidegroup)", out reason);
+                        }
+                        break;
+                    }
+
+                    case "trackmove":
+                    {
+                        if (args.Length != 9 || !Int(args[0], out int at) ||
+                            !Num(args[1], out double x) || !Num(args[2], out double y) ||
+                            !Num(args[3], out double z) || !Num(args[4], out double xoz) ||
+                            !Num(args[5], out double yoz) || !Num(args[6], out double xoy) ||
+                            !Int(args[7], out int ease) || !Int(args[8], out int duration))
+                            return Fail("trackmove(ms, x,y,z, xoz,yoz,xoy, ease, durationMs)", out reason);
+                        if (ease < 0 || ease > 3)
+                            return Fail("trackmove ease 0..3", out reason);
+                        if (duration < 0)
+                            return Fail("trackmove duration >= 0", out reason);
+
+                        chart.Directives.Add(new SceneDirectives.Entry
+                        {
+                            Kind = SceneDirectives.Kind.TrackMove,
+                            Time = at,
+                            X = (float)x, Y = (float)y, Z = (float)z,
+                            Xoz = (float)xoz, Yoz = (float)yoz, Xoy = (float)xoy,
+                            Mode = ease,
+                            Duration = duration,
+                        });
+                        break;
+                    }
+
+                    case "showtext":
+                    {
+                        if (args.Length < 2 || args.Length > 3 ||
+                            !Int(args[0], out int at) || !Int(args[1], out int id))
+                            return Fail("showtext(ms, id[, size])", out reason);
+                        int size = 0;
+                        if (args.Length == 3 && !Int(args[2], out size))
+                            return Fail("showtext size", out reason);
+
+                        chart.Directives.Add(new SceneDirectives.Entry
+                        {
+                            Kind = SceneDirectives.Kind.ShowText,
+                            Time = at,
+                            Value = id,
+                            Size = size,
+                        });
+                        break;
+                    }
+
+                    case "audiooffset":
+                    {
+                        if (args.Length != 1 || !Int(args[0], out int offset))
+                            return Fail("audiooffset(ms)", out reason);
+                        if (audioOffsetSeen) break;
+                        audioOffsetSeen = true;
+
+                        chart.Directives.Add(new SceneDirectives.Entry
+                        {
+                            Kind = SceneDirectives.Kind.AudioOffset,
+                            Time = 0,
+                            Value = offset,
+                        });
+                        break;
+                    }
+
+                    case "skyareapack":
+                    case "packpiece":
+                        return Fail($"{command} is retired: connected skyarea geometry is classified " +
+                                    "at run time, not packed by hand", out reason);
+
                     default:
 
                         break;
+                }
+
+                if (chart.Notes.Count > notesBefore)
+                {
+                    Note added = chart.Notes[chart.Notes.Count - 1];
+                    added.TimingGroup = currentGroup |
+                        (blockNoInput ? unchecked((int)0x80000000) : 0) |
+                        (blockNoClip ? 0x40000000 : 0);
+
+                    if (inBlock && blockNoInput)
+                    {
+                        chart.Notes.RemoveAt(chart.Notes.Count - 1);
+                        if (added.Type == TypeSkyArea) chart.NoInput.Add(added);
+                        else skipped++;
+                    }
+                    else
+                    {
+                        chart.Notes[chart.Notes.Count - 1] = added;
+                    }
                 }
             }
 
@@ -474,10 +898,22 @@ namespace CustomSong
                 return false;
             }
 
+            if (noInputSky.Count > 0)
+            {
+                for (int i = chart.Notes.Count - 1; i >= 0; i--)
+                {
+                    Note note = chart.Notes[i];
+                    if (note.Type != TypeSkyArea || !noInputSky.Contains(note.Line)) continue;
+                    chart.Notes.RemoveAt(i);
+                    chart.NoInput.Add(note);
+                }
+            }
+
             if (skipped > 0)
             {
             }
 
+            FinishLyrics(chart.Lyrics);
             chart.Order();
             chart.RenumberSkyGroups();
             chart.EnsureSpeed();
@@ -554,8 +990,221 @@ namespace CustomSong
         private static int EaseBits(int ease, int[] bits) =>
             ease >= 0 && ease < bits.Length ? bits[ease] : 0;
 
+        internal static bool Hex(string text, out uint rgba)
+        {
+            rgba = 0;
+            string hex = text.Trim();
+            if (hex.StartsWith("#", StringComparison.Ordinal)) hex = hex.Substring(1);
+            if (hex.Length == 6) hex += "FF";
+            if (hex.Length != 8) return false;
+            return uint.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out rgba);
+        }
+
+        private static bool Flag(string text, out bool value)
+        {
+            switch (text.Trim().ToLowerInvariant())
+            {
+                case "1": case "true": case "yes": case "on":
+                    value = true; return true;
+                case "0": case "false": case "no": case "off":
+                    value = false; return true;
+                default:
+                    value = false; return false;
+            }
+        }
+
+        private static void GroupSpeed(TextChart chart, int group, int time, double multiplier)
+        {
+            chart.Directives.Add(new SceneDirectives.Entry
+            {
+                Kind = SceneDirectives.Kind.GroupSpeed,
+                Time = time,
+                Group = group,
+                X = (float)multiplier,
+            });
+        }
+
         private static int[] Pairs(int a, int b, int c, int d, int e, int f, int g, int h) =>
             new[] { a, b, c, d, e, f, g, h };
+
+        private static bool Lyric(string body, out SceneDirectives.Text text, out string reason)
+        {
+            text = new SceneDirectives.Text
+            {
+                Size = 40f,
+                Side = 0,
+                X = -1f,
+                Y = -1f,
+                Amp = 1.5f,
+                Hz = 0.5f,
+                Spacing = 2f,
+                FadeIn = 0f,
+                FadeOut = 180f,
+                Fill = 0xFFFFFFE6,
+                Shadow = 0x000000A6,
+                ShadowPx = 3f,
+                End = -1,
+            };
+            reason = null;
+            List<string> parts = SplitArguments(body);
+            if (parts.Count < 2) return Fail("text(ms, \"line\"[, key=value…])", out reason);
+
+            if (!LyricTime(parts[0], out text.Start))
+                return Fail("text time as ms or m:ss.mmm", out reason);
+            text.Value = parts[1].Trim();
+            if (text.Value.Length == 0) return Fail("text with a non-empty line", out reason);
+
+            for (int i = 2; i < parts.Count; i++)
+            {
+                string option = parts[i];
+                int equals = option.IndexOf('=');
+                if (equals <= 0) continue;
+                string key = option.Substring(0, equals).Trim().ToLowerInvariant();
+                string value = option.Substring(equals + 1).Trim();
+
+                switch (key)
+                {
+                    case "size":
+                        if (Num(value, out double size)) text.Size = (float)size;
+                        break;
+
+                    case "side":
+                        text.Side = value.Equals("right", StringComparison.OrdinalIgnoreCase) ? 1
+                                  : value.Equals("center", StringComparison.OrdinalIgnoreCase) ? 2
+                                  : 0;
+                        break;
+
+                    case "x":
+                        if (Num(value, out double x)) text.X = (float)x;
+                        break;
+
+                    case "y":
+                        if (Num(value, out double y)) text.Y = (float)y;
+                        break;
+
+                    case "pos":
+                    {
+                        string[] box = value.Split(',');
+                        if (box.Length >= 2 && Num(box[0], out double px) && Num(box[1], out double py))
+                        {
+                            text.X = (float)px;
+                            text.Y = (float)py;
+                        }
+                        break;
+                    }
+
+                    case "end":
+                        if (LyricTime(value, out int end)) text.End = end;
+                        break;
+
+                    case "amp":
+                        if (Num(value, out double amp)) text.Amp = (float)amp;
+                        break;
+
+                    case "hz":
+                        if (Num(value, out double hz)) text.Hz = (float)hz;
+                        break;
+
+                    case "spacing":
+                        if (Num(value, out double spacing)) text.Spacing = (float)spacing;
+                        break;
+
+                    case "fade":
+                        if (Num(value, out double fade)) text.FadeOut = (float)fade;
+                        break;
+
+                    case "entry":
+                        if (Num(value, out double entry)) text.FadeIn = (float)entry;
+                        break;
+
+                    case "shadowpx":
+                        if (Num(value, out double shadowPx)) text.ShadowPx = (float)shadowPx;
+                        break;
+
+                    case "fill":
+                        if (Hex(value, out uint fill)) text.Fill = fill;
+                        break;
+
+                    case "shadow":
+                        if (Hex(value, out uint shadow)) text.Shadow = shadow;
+                        break;
+                }
+            }
+
+            return true;
+        }
+
+        private static List<string> SplitArguments(string body)
+        {
+            var parts = new List<string>();
+            var text = new StringBuilder();
+            bool quoted = false;
+
+            for (int i = 0; i < body.Length; i++)
+            {
+                char c = body[i];
+
+                if (quoted)
+                {
+                    if (c == '\\' && i + 1 < body.Length) { text.Append(body[++i]); continue; }
+                    if (c == '"') { quoted = false; continue; }
+                    text.Append(c);
+                    continue;
+                }
+
+                if (c == '"') { quoted = true; continue; }
+                if (c == ',') { parts.Add(text.ToString()); text.Clear(); continue; }
+                text.Append(c);
+            }
+
+            parts.Add(text.ToString());
+            return parts;
+        }
+
+        private static bool LyricTime(string raw, out int ms)
+        {
+            ms = 0;
+            if (raw == null) return false;
+
+            string value = raw.Trim().ToLowerInvariant()
+                              .Replace('，', ',').Replace('（', '(').Replace('）', ')');
+
+            if (value.EndsWith("ms", StringComparison.Ordinal))
+                value = value.Substring(0, value.Length - 2).Trim();
+            string[] parts = value.Split(':');
+
+            if (parts.Length == 3 && Num(parts[0], out double minutes) &&
+                Num(parts[1], out double seconds) && Num(parts[2], out double millis))
+            {
+                ms = (int)Math.Round(minutes * 60000.0 + seconds * 1000.0 + millis);
+                return true;
+            }
+
+            if (parts.Length == 2 && Num(parts[0], out minutes) && Num(parts[1], out seconds))
+            {
+                ms = (int)Math.Round(minutes * 60000.0 + seconds * 1000.0);
+                return true;
+            }
+
+            if (parts.Length != 1 || !Num(value, out double plain)) return false;
+            ms = (int)Math.Round(plain);
+            return true;
+        }
+
+        private static void FinishLyrics(List<SceneDirectives.Text> lyrics)
+        {
+            if (lyrics.Count == 0) return;
+            lyrics.Sort((a, b) => a.Start.CompareTo(b.Start));
+
+            for (int i = 0; i < lyrics.Count; i++)
+            {
+                SceneDirectives.Text row = lyrics[i];
+                int end = i + 1 < lyrics.Count ? lyrics[i + 1].Start : row.Start + 6000;
+                if (row.End > row.Start) end = Math.Min(end, row.End);
+                row.End = end;
+                lyrics[i] = row;
+            }
+        }
 
         private static bool Fail(string shape, out string reason)
         {
@@ -571,6 +1220,22 @@ namespace CustomSong
             if (comment >= 0) text = text.Substring(0, comment).Trim();
             if (text.EndsWith(":", StringComparison.Ordinal)) text = text.Substring(0, text.Length - 1).Trim();
             return text;
+        }
+
+        private static string TimingGroupHeader(string raw)
+        {
+            string line = Active(raw);
+            int open = line.IndexOf('(');
+            int close = line.LastIndexOf(')');
+            if (open <= 0 || close <= open) return null;
+
+            if (!string.Equals(line.Substring(0, open).Trim(), "timinggroup",
+                               StringComparison.OrdinalIgnoreCase))
+                return null;
+            string options = line.Substring(open + 1, close - open - 1);
+            int comma = options.IndexOf(',');
+            string first = (comma < 0 ? options : options.Substring(0, comma)).Trim();
+            return first.Length == 0 ? null : first;
         }
 
         private static bool Int(string text, out int value)
