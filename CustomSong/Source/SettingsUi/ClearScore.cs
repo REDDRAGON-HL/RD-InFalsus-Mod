@@ -110,7 +110,7 @@ namespace CustomSong
             MethodInfo built = HarmonyHooks.Target("TutorialReplayContainer", "_vJ", "ifapp.Game.Scenes");
             if (built == null)
             {
-                ModLog.WarnRelease("clear score: the help menu was not found; the row cannot be added");
+                ModLog.Warn("clear score: the help menu was not found; the row cannot be added");
                 return false;
             }
 
@@ -125,7 +125,7 @@ namespace CustomSong
                                                    "ifapp.Game.Scenes");
             if (press == null)
             {
-                ModLog.WarnRelease("clear score: the menu's press handler was not found; the row " +
+                ModLog.Warn("clear score: the menu's press handler was not found; the row " +
                                    "cannot be told apart");
                 return false;
             }
@@ -141,7 +141,7 @@ namespace CustomSong
                                                      "ifapp.Game.Scenes");
             if (confirm == null)
             {
-                ModLog.WarnRelease("clear score: the box's confirm handler was not found; a yes will " +
+                ModLog.Warn("clear score: the box's confirm handler was not found; a yes will " +
                                    "clear nothing");
                 return false;
             }
@@ -162,7 +162,7 @@ namespace CustomSong
             }
             catch (Exception e)
             {
-                ModLog.WarnRelease("clear score: the score could not be cleared: " + ModLog.Describe(e));
+                ModLog.Warn("clear score: the score could not be cleared: " + ModLog.Describe(e));
             }
         }
 
@@ -181,7 +181,7 @@ namespace CustomSong
                 IntPtr scene = Hooks.SongSelect;
                 if (!Memory.LooksLikeObject(scene))
                 {
-                    ModLog.WarnRelease("clear score: the song-select page is not up; the row will do nothing");
+                    ModLog.Warn("clear score: the song-select page is not up; the row will do nothing");
                     return;
                 }
 
@@ -190,21 +190,21 @@ namespace CustomSong
 
                 if ((flag & 0x0F) == 0 || (flag & 0xF0) != 0)
                 {
-                    ModLog.WarnRelease($"clear score: the page's difficulty byte is {flag:X2}; " +
+                    ModLog.Warn($"clear score: the page's difficulty byte is {flag:X2}; " +
                                        "the row will do nothing");
                     return;
                 }
 
                 if (id == 0)
                 {
-                    ModLog.WarnRelease("clear score: the page has no song selected; the row will do nothing");
+                    ModLog.Warn("clear score: the page has no song selected; the row will do nothing");
                     return;
                 }
 
                 IntPtr record = Record(scene, id);
                 if (record == IntPtr.Zero)
                 {
-                    ModLog.WarnRelease($"clear score: song {id} is not in the page's list; " +
+                    ModLog.Warn($"clear score: song {id} is not in the page's list; " +
                                        "the row will do nothing");
                     return;
                 }
@@ -256,7 +256,7 @@ namespace CustomSong
             }
             catch (Exception e)
             {
-                ModLog.WarnRelease("clear score: the box could not be reworded: " +
+                ModLog.Warn("clear score: the box could not be reworded: " +
                                    ModLog.Describe(e));
             }
         }
@@ -293,21 +293,19 @@ namespace CustomSong
         {
             if (!ScoreStore.Ready)
             {
-                ModLog.WarnRelease("clear score: the custom results are not open; nothing was removed");
+                ModLog.Warn("clear score: the custom results are not open; nothing was removed");
                 return;
             }
 
             if (!_aimed)
             {
-                ModLog.WarnRelease("clear score: the row was not aimed at anything; nothing was removed");
+                ModLog.Warn("clear score: the row was not aimed at anything; nothing was removed");
                 return;
             }
 
             int history = ForgetHistory(ScoreStore.Table, _songId, _flag);
             bool highscore = ForgetHighscore(ScoreStore.Table, _key);
             ScoreStore.Save();
-            ModLog.Load($"clear score: {history} run(s) and {(highscore ? "the best" : "no best")} " +
-                        $"cleared for song {_songId} at difficulty flag {_flag}");
             _aimed = false;
         }
 
@@ -339,7 +337,7 @@ namespace CustomSong
 
             if (length == IntPtr.Zero || item == IntPtr.Zero || removeAt == IntPtr.Zero)
             {
-                ModLog.WarnRelease("clear score: the history list's methods were not found; the runs " +
+                ModLog.Warn("clear score: the history list's methods were not found; the runs " +
                                    "stay in it");
                 return false;
             }
@@ -361,7 +359,7 @@ namespace CustomSong
                 IntPtr remove = klass == IntPtr.Zero ? IntPtr.Zero : ScoreStore.MethodOn(klass, "Remove", 1);
                 if (remove == IntPtr.Zero)
                 {
-                    ModLog.WarnRelease("clear score: the best-result table has no Remove in this build; " +
+                    ModLog.Warn("clear score: the best-result table has no Remove in this build; " +
                                        "the score stays on the song cards");
                     return false;
                 }
@@ -374,7 +372,7 @@ namespace CustomSong
                     Il2CppInterop.Runtime.IL2CPP.il2cpp_runtime_invoke(remove, scores, (void**)args, ref raised);
                     if (raised != IntPtr.Zero)
                     {
-                        ModLog.WarnRelease("clear score: the best-result table raised on the removal: " +
+                        ModLog.Warn("clear score: the best-result table raised on the removal: " +
                                            Raised.Text(raised));
                         return false;
                     }
@@ -384,7 +382,7 @@ namespace CustomSong
             }
             catch (Exception e)
             {
-                ModLog.WarnRelease("clear score: the best result could not be removed: " + ModLog.Describe(e));
+                ModLog.Warn("clear score: the best result could not be removed: " + ModLog.Describe(e));
                 return false;
             }
         }
@@ -442,7 +440,10 @@ namespace CustomSong
             if (text != IntPtr.Zero)
                 _setText = (delegate* unmanaged[Cdecl]<IntPtr, IntPtr, int, void>)*(IntPtr*)text;
             else
-                ModLog.WarnRelease("clear score: the box keeps the game's own words");
+                {
+                ModLog.Warn("clear score: the box keeps the game's own words");
+                }
+
             _length = null;
             _item = null;
             _removeAt = null;
@@ -453,7 +454,7 @@ namespace CustomSong
         {
             if (_failed) return;
             _failed = true;
-            ModLog.WarnRelease("clear score: the menu row was not added: " + why);
+            ModLog.Warn("clear score: the menu row was not added: " + why);
         }
     }
 }

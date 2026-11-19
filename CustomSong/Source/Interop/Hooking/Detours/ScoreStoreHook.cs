@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using CustomSong.Replay;
 
 namespace CustomSong
 {
@@ -250,7 +251,7 @@ namespace CustomSong
                 }
             }
 
-            if (Auto.AutoMark.Ran)
+            if (Auto.AutoMark.Ran || ReplayCore.Ran)
             {
                 HandOverTheStoredScore(table, songInfo, newResult, existingScore);
                 return NoChange;
@@ -290,14 +291,10 @@ namespace CustomSong
                 ulong best = StoredScore(table, songInfo, difficulty);
                 if (best == 0)
                 {
-                    ModLog.Load($"autoplay: no stored score for difficulty flag {difficulty} " +
-                                $"(table ours, song {Memory.U16(songInfo + Offsets.Song.Id)})");
                     return;
                 }
 
                 Memory.WriteI64(target, (long)best);
-                ModLog.Load($"autoplay: the results screen is given the stored score {best} " +
-                            $"(difficulty flag {difficulty})");
             }
             catch (Exception e)
             {
@@ -322,11 +319,17 @@ namespace CustomSong
                         ours = ScoreStore.IsOurs(playing);
                     }
 
+                    if (ReplayCore.Ran)
+                    {
+                        ScoreStore.EncounterRan = true;
+                        ScoreStore.EncounterDropped++;
+                        return 0;
+                    }
+
                     if (Auto.AutoMark.Ran)
                     {
                         ScoreStore.EncounterRan = true;
                         ScoreStore.EncounterDropped++;
-                        ModLog.Load("autoplay: the encounter result is not written");
                         return 0;
                     }
                 }

@@ -60,9 +60,6 @@ namespace CustomSong
                 _hovered.Attach();
                 _hoveredTramp = _hovered.Trampoline;
             }
-
-            ModLog.Load($"AUTO row: the option buttons are hooked " +
-                        $"(click=yes, hover={(hover != IntPtr.Zero ? "yes" : "no")})");
         }
 
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]

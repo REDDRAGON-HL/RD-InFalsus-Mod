@@ -30,7 +30,9 @@ namespace CustomSong
         private static int ModelField = Offsets.Unresolved;
         private static int StripsField = Offsets.Unresolved;
         private static int StripPageField = Offsets.Unresolved;
-        private const int StripWindow = 11;
+        private static int SongScrollListField = Offsets.Unresolved;
+        private static int ScrollContentField = Offsets.Unresolved;
+        private static int MaskTargetField = Offsets.Unresolved;
         private static int ModelSongArray = Offsets.Unresolved;
         private static bool _fieldsResolved;
         private static bool _fieldsMissing;
@@ -58,6 +60,9 @@ namespace CustomSong
             ModelField = FieldResolver.Lookup("PackVisualMemberLarge", "_Lf");
             StripsField = FieldResolver.Lookup("PackVisualMemberLarge", "_Mf");
             StripPageField = FieldResolver.Lookup("PackVisualMemberLarge", "_Nf");
+            SongScrollListField = FieldResolver.Lookup("PackVisualMemberLarge", "songScrollList");
+            ScrollContentField = FieldResolver.Lookup("UIScrollListView", "contentContainer");
+            MaskTargetField = FieldResolver.Lookup("PackVisualMemberLarge", "maskTarget");
             ModelSongArray = FieldResolver.Lookup("_iH", "_sDb");
 
             if (PackDataAccess < 0 || ViewModelSong < 0 || CardsField < 0 ||
@@ -164,20 +169,34 @@ namespace CustomSong
         }
 
         private static IntPtr _stripCard;
-        private static int _appliedPage = int.MinValue, _appliedStrips = -1;
 
-        internal static void TickStripWindow()
+        internal static void TickNewTags()
         {
+            if (!_newTagsDirty && !_maskWaiting && !_registerStrips) return;
             if (_stripCard == IntPtr.Zero) return;
             if (!Memory.LooksLikeObject(_stripCard) || Memory.Ptr(_stripCard + 0x10) == IntPtr.Zero ||
                 Faulted || !ResolveFields())
             {
                 _stripCard = IntPtr.Zero;
                 _cards.Clear();
+                _maskWaiting = false;
+                _registerStrips = false;
                 return;
             }
 
-            ApplyStripWindow(_stripCard);
+            if (_registerStrips)
+            {
+                _registerStrips = false;
+                RegisterStrips(_stripCard);
+            }
+
+            if (_newTagsDirty) VisitStrips(_stripCard);
+
+            if (_maskWaiting)
+            {
+                ReportStripMask(_stripCard);
+                if (++_maskTries > 240) _maskWaiting = false;
+            }
         }
 
         private struct CardCall
@@ -209,7 +228,7 @@ namespace CustomSong
             }
             catch (Exception e)
             {
-                ModLog.WarnRelease("the pack card could not be picked up again: " + ModLog.Describe(e));
+                ModLog.Warn("the pack card could not be picked up again: " + ModLog.Describe(e));
             }
 
             if (!_saidResume)
@@ -232,6 +251,7 @@ namespace CustomSong
 
         private static void ReplayCards()
         {
+            long mark = Timing.Now;
             for (int i = 0; i < _cards.Count; i++)
             {
                 CardCall call = _cards[i];
@@ -295,8 +315,6 @@ namespace CustomSong
             ModLog.Warn($"the card's {what} component could not be looked up");
         }
 
-        private static readonly HashSet<IntPtr> _stripsHidden = new HashSet<IntPtr>();
-
         private static void ApplyNewTags(IntPtr items, int count)
         {
             if (!Offsets.Ready || !ScoreStore.Ready) return;
@@ -326,68 +344,539 @@ namespace CustomSong
                 }
                 catch (Exception e)
                 {
-                    ModLog.WarnRelease("the pack strip's NEW tag could not be corrected: " +
+                    ModLog.Warn("the pack strip's NEW tag could not be corrected: " +
                                        ModLog.Describe(e));
                 }
             }
         }
 
-        private static void ApplyStripWindow(IntPtr card)
+        private static void VisitStrips(IntPtr card)
         {
             if (Faulted || !ResolveFields()) return;
-            if (StripsField < 0 || StripPageField < 0 || ModelField < 0) return;
+            if (StripsField < 0 || ModelField < 0) return;
             IntPtr model = Memory.Ptr(card + ModelField);
-            if (!Memory.LooksLikeObject(model) || !SongCatalog.IsCustomPack(PackId(model))) return;
-            if (!Memory.TryList(Memory.Ptr(card + StripsField), out IntPtr items, out int count)) return;
-
-            if (_newTagsDirty)
+            if (!Memory.LooksLikeObject(model) || !SongCatalog.IsCustomPack(PackId(model)))
             {
                 _newTagsDirty = false;
-                ApplyNewTags(items, count);
+                return;
             }
 
-            int first = Memory.I32(card + StripPageField);
-            if (first == _appliedPage && count == _appliedStrips) return;
-            _appliedPage = first;
-            _appliedStrips = count;
+            if (!Memory.TryList(Memory.Ptr(card + StripsField), out IntPtr items, out int count)) return;
+            if (!_newTagsDirty) return;
+            _newTagsDirty = false;
+            ApplyNewTags(items, count);
+        }
 
-            if (!_saidWindow)
+        private static bool ReportStripMask(IntPtr card)
+        {
+            try
             {
-                _saidWindow = true;
+                IntPtr model = Memory.Ptr(card + ModelField);
+                bool ours = Memory.LooksLikeObject(model) && SongCatalog.IsCustomPack(PackId(model));
+                IntPtr mask = _stripMask;
+                if (mask == IntPtr.Zero || !Memory.LooksLikeObject(mask) ||
+                    Memory.Ptr(mask + 0x10) == IntPtr.Zero)
+                {
+                    GameObject found = GameObject.Find("SongListMask");
+                    if (found == null)
+                    {
+                        if (_maskTries == 0) ModLog.Warn("strip mask: SongListMask not found");
+                        return false;
+                    }
+
+                    IntPtr type = IntPtr.Zero;
+                    mask = ComponentOf(found, ref type, "ifapp.Game", "C2DUpdateMask");
+                    if (mask == IntPtr.Zero || Memory.Ptr(mask + 0x10) == IntPtr.Zero)
+                    {
+                        if (_maskTries == 0)
+                            {
+                            ModLog.Warn("strip mask: no C2DUpdateMask on " + found.name);
+                            }
+                        return false;
+                    }
+
+                    _stripMask = mask;
+                    _maskWhere = $"go={found.name} active={found.activeInHierarchy} " +
+                                 $"parent={(found.transform.parent != null ? found.transform.parent.name : "?")}";
+                }
+
+                int index = Memory.I32(mask + 0x40);
+                if (index < 0)
+                {
+                    if (_maskTries == 0)
+                        {
+                        ModLog.Warn($"strip mask: waiting, {_maskWhere} " +
+                                           $"enabled={Memory.U8(mask + 0x14)}");
+                        }
+                    return false;
+                }
+
+                if (!ours)
+                {
+                    if (_maskTries < 3) return false;
+                    int official = -1;
+                    float officialBlock = -1;
+                    if (Memory.TryList(Memory.Ptr(card + StripsField), out IntPtr rows, out official) &&
+                        official > 0)
+                    {
+                        IntPtr row = Memory.Ptr(rows);
+                        if (Memory.LooksLikeObject(row))
+                        {
+                            IntPtr c2d = Memory.Ptr(row + 0x20);
+                            if (Memory.LooksLikeObject(c2d))
+                                ProbeRenderers(new Component(c2d).gameObject.transform, 0,
+                                               ref officialBlock);
+                        }
+                    }
+
+                    if (!_maskSaid)
+                    {
+                        _maskSaid = true;
+                        ModLog.Warn($"strip mask official: {_maskWhere} index={index} " +
+                                           $"block={officialBlock} strips={official}");
+                    }
+                    return true;
+                }
+
+                IntPtr songList = IntPtr.Zero;
+                if (SongScrollListField >= 0 && ScrollContentField >= 0)
+                {
+                    IntPtr list = Memory.Ptr(card + SongScrollListField);
+                    if (Memory.LooksLikeObject(list)) songList = Memory.Ptr(list + ScrollContentField);
+                }
+
+                int maskParameter = Shader.PropertyToID("_Lowiro_MaskingParameterIndex");
+
+                if (_stripRenderers == null)
+                {
+                    _stripRenderers = new List<IntPtr>();
+                    int count = -1;
+                    if (Memory.TryList(Memory.Ptr(card + StripsField), out IntPtr items, out count))
+                    {
+                        for (int i = 0; i < count; i++)
+                        {
+                            IntPtr row = Memory.Ptr(items + i * IntPtr.Size);
+                            if (!Memory.LooksLikeObject(row)) continue;
+                            IntPtr c2d = Memory.Ptr(row + 0x20);
+                            if (!Memory.LooksLikeObject(c2d)) continue;
+                            if (_firstStrip == IntPtr.Zero) _firstStrip = c2d;
+                            Memory.WriteI32(c2d + 0x50, index);
+                            _stripsWritten++;
+                            CollectRenderers(new Component(c2d).gameObject.transform, 0, index);
+
+                            if (_stripParent == "")
+                            {
+                                Transform parent = new Component(c2d).gameObject.transform.parent;
+                                _stripParent = parent != null ? parent.name : "?";
+                            }
+                        }
+                    }
+                }
+
+                float blockValue = -1, afterValue = -1;
+                int pushed = 0;
+                foreach (IntPtr renderer in _stripRenderers)
+                {
+                    try
+                    {
+                        if (!Memory.LooksLikeObject(renderer) || Memory.Ptr(renderer + 0x10) == IntPtr.Zero)
+                            continue;
+                        var block = new MaterialPropertyBlock();
+                        var meshRenderer = new MeshRenderer(renderer);
+                        meshRenderer.GetPropertyBlock(block);
+                        if (blockValue < 0) blockValue = block.GetFloat(maskParameter);
+                        block.SetFloat(maskParameter, index);
+                        meshRenderer.SetPropertyBlock(block);
+
+                        if (pushed++ == 0)
+                        {
+                            var check = new MaterialPropertyBlock();
+                            meshRenderer.GetPropertyBlock(check);
+                            afterValue = check.GetFloat(maskParameter);
+
+                            try
+                            {
+                                Material material = meshRenderer.sharedMaterial;
+                                if (material != null) material.SetFloat(maskParameter, index);
+                            }
+                            catch (Exception e)
+                            {
+                                if (!_materialErrorSaid)
+                                {
+                                    _materialErrorSaid = true;
+                                    ModLog.Warn("the strip mask material could not be set: " +
+                                                       ModLog.Describe(e));
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        if (blockValue < 0) blockValue = -3;
+                        if (!_pushErrorSaid)
+                        {
+                            _pushErrorSaid = true;
+                            ModLog.Warn("the strip mask property could not be set: " +
+                                               ModLog.Describe(e));
+                        }
+                    }
+                }
+
+                int slotMain = -1, slotOther = -1, cacMain = -1, cacOther = -1;
+                IntPtr wiClass = FieldResolver.ClassPointer("_wi");
+                IntPtr wiStatics = wiClass == IntPtr.Zero ? IntPtr.Zero : FieldResolver.Statics(wiClass);
+                if (wiStatics != IntPtr.Zero && _firstStrip != IntPtr.Zero)
+                {
+                    slotMain = SlotOf(Memory.Ptr(wiStatics + 0x90), _firstStrip);
+                    slotOther = SlotOf(Memory.Ptr(wiStatics + 0x98), _firstStrip);
+                    if (slotMain >= 0) cacMain = MaskIn(Memory.Ptr(wiStatics + 0xA0), slotMain);
+                    if (slotOther >= 0) cacOther = MaskIn(Memory.Ptr(wiStatics + 0xA8), slotOther);
+                }
+
+                if (!_maskSaid)
+                {
+                    _maskSaid = true;
+                    ModLog.Warn($"strip mask: {_maskWhere} index={index} " +
+                                       $"songList={(Memory.LooksLikeObject(songList) ? Memory.I32(songList + 0x50) : -2)} " +
+                                       $"block={blockValue} after={afterValue} strips={_stripsWritten} " +
+                                       $"c2ds={_maskWrites} resets={_maskResets} parent={_stripParent} " +
+                                       $"renderers={_stripRenderers.Count} pushed={pushed} " +
+                                       $"slot={slotMain}/{slotOther} cac={cacMain}/{cacOther} " +
+                                       $"sameList={SameList(songList)} targetOk={TargetOk(card, mask)} " +
+                                       $"owned={Memory.U8(card + 0x198)}");
+                }
+                return true;
             }
-
-            for (int i = 0; i < count; i++)
+            catch (Exception e)
             {
-                try
-                {
-                    IntPtr strip = Memory.Ptr(items + i * IntPtr.Size);
-                    if (!Memory.LooksLikeObject(strip)) continue;
-                    GameObject gameObject = new Component(strip).gameObject;
-                    if (gameObject == null) continue;
-                    bool visible = i >= first && i < first + StripWindow;
-                    if (!visible)
-                    {
-                        if (gameObject.activeSelf && _stripsHidden.Add(strip))
-                            gameObject.SetActive(false);
-                    }
-                    else if (_stripsHidden.Remove(strip))
-                    {
-                        gameObject.SetActive(true);
-                    }
-                }
-                catch (Exception e)
-                {
-                    _stripCard = IntPtr.Zero;
-                    if (_windowReported) continue;
-                    _windowReported = true;
-                    ModLog.Error("the pack card's strip window could not be applied: " +
-                                 ModLog.Describe(e));
-                }
+                ModLog.WarnRelease("the strip mask could not be read: " + ModLog.Describe(e));
+                return true;
             }
         }
 
-        private static bool _windowReported;
-        private static bool _saidWindow;
+        private static bool _maskWaiting;
+        private static int _maskTries;
+        private static IntPtr _stripMask;
+        private static List<IntPtr> _stripRenderers;
+        private static int _stripsWritten;
+        private static int _maskWrites;
+        private static int _maskResets;
+        private static IntPtr _c2dReset;
+        private static string _stripParent = "";
+        private static IntPtr _firstStrip;
+        private static IntPtr _meshRendererType;
+        private static IntPtr _constrained2dType;
+        private static bool _pushErrorSaid;
+        private static bool _materialErrorSaid;
+
+        private static void ProbeRenderers(Transform at, int depth, ref float first)
+        {
+            if (at == null || depth > 4) return;
+
+            IntPtr renderer = ComponentOf(at.gameObject, ref _meshRendererType,
+                                          "UnityEngine", "MeshRenderer");
+            if (renderer != IntPtr.Zero && first < 0 && Memory.Ptr(renderer + 0x10) != IntPtr.Zero)
+            {
+                try
+                {
+                    if (_maskParameterId < 0)
+                        _maskParameterId = Shader.PropertyToID("_Lowiro_MaskingParameterIndex");
+                    var block = new MaterialPropertyBlock();
+                    new MeshRenderer(renderer).GetPropertyBlock(block);
+                    first = block.GetFloat(_maskParameterId);
+                }
+                catch (Exception)
+                {
+                }
+            }
+
+            int children = at.childCount;
+            for (int i = 0; i < children; i++) ProbeRenderers(at.GetChild(i), depth + 1, ref first);
+        }
+
+        private static int _maskParameterId = -1;
+        private static bool _registerStrips;
+        private const int C2DId = 0x178;
+        private static IntPtr _wiEra, _wiBra, _setEnabled, _getEnabled;
+
+        private static void RegisterStrips(IntPtr card)
+        {
+            try
+            {
+                if (StripsField < 0 || ModelField < 0) return;
+                IntPtr model = Memory.Ptr(card + ModelField);
+                if (!Memory.LooksLikeObject(model) || !SongCatalog.IsCustomPack(PackId(model))) return;
+                if (!Memory.TryList(Memory.Ptr(card + StripsField), out IntPtr items, out int count)) return;
+                var c2ds = new List<IntPtr>();
+                for (int i = 0; i < count; i++)
+                {
+                    IntPtr row = Memory.Ptr(items + i * IntPtr.Size);
+                    if (!Memory.LooksLikeObject(row)) continue;
+                    IntPtr c2d = Memory.Ptr(row + 0x20);
+                    if (!Memory.LooksLikeObject(c2d)) continue;
+                    CollectC2ds(new Component(c2d).gameObject.transform, c2ds, 0);
+                }
+                if (c2ds.Count == 0) return;
+                EnsureRegisterApi();
+                if (_wiEra == IntPtr.Zero || _wiBra == IntPtr.Zero || _c2dReset == IntPtr.Zero)
+                {
+                    ModLog.Warn("strip register: the batch entry points are missing");
+                    return;
+                }
+
+                var reopened = new List<IntPtr>();
+                var woken = 0;
+                foreach (IntPtr c2d in c2ds)
+                {
+                    GameObject go = new Component(c2d).gameObject;
+                    if (go != null && !go.activeSelf)
+                    {
+                        go.SetActive(true);
+                        reopened.Add(go.Pointer);
+                    }
+
+                    if (_getEnabled != IntPtr.Zero && _setEnabled != IntPtr.Zero &&
+                        ((delegate* unmanaged[Cdecl]<IntPtr, IntPtr, byte>)_getEnabled)(c2d, IntPtr.Zero) == 0)
+                    {
+                        ((delegate* unmanaged[Cdecl]<IntPtr, byte, IntPtr, void>)_setEnabled)(c2d, 1, IntPtr.Zero);
+                        woken++;
+                    }
+                }
+
+                int placed = 0;
+                ModLog.Warn($"strip register: start {c2ds.Count} c2ds, woken={woken}, " +
+                                   $"reopened={reopened.Count}");
+                foreach (IntPtr c2d in c2ds)
+                {
+                    if (Memory.U16(c2d + C2DId) != 0xFFFF) continue;
+                    if (!ParentHasC2D(c2d)) continue;
+
+                    try
+                    {
+                        ushort slot = ((delegate* unmanaged[Cdecl]<IntPtr, IntPtr, ushort>)_wiBra)(c2d, IntPtr.Zero);
+                        if (slot == 0) continue;
+                        Memory.WriteU16(c2d + C2DId, slot);
+                        placed++;
+                    }
+                    catch (Exception)
+                    {
+                    }
+                }
+
+                foreach (IntPtr c2d in c2ds)
+                    ((delegate* unmanaged[Cdecl]<IntPtr, IntPtr, void>)_c2dReset)(c2d, IntPtr.Zero);
+                Recompute();
+                int live = LiveCount(c2ds);
+
+                if (live < c2ds.Count)
+                {
+                    foreach (IntPtr c2d in c2ds)
+                    {
+                        if (Memory.U16(c2d + C2DId) != 0xFFFF) continue;
+                        if (!ParentHasC2D(c2d)) continue;
+
+                        try
+                        {
+                            ((delegate* unmanaged[Cdecl]<IntPtr, IntPtr, ushort>)_wiBra)(c2d, IntPtr.Zero);
+                        }
+                        catch (Exception)
+                        {
+                        }
+                    }
+
+                    Recompute();
+                    live = LiveCount(c2ds);
+                }
+
+                for (int i = reopened.Count - 1; i >= 0; i--)
+                {
+                    try
+                    {
+                        new GameObject(reopened[i]).SetActive(false);
+                    }
+                    catch (Exception)
+                    {
+                    }
+                }
+
+                Recompute();
+
+                ModLog.Warn($"strip register: {c2ds.Count} c2ds, placed={placed}, live={live}, " +
+                                   $"woken={woken}, reopened={reopened.Count}");
+            }
+            catch (Exception e)
+            {
+                ModLog.WarnRelease("strip register failed: " + ModLog.Describe(e));
+            }
+        }
+
+        private static void EnsureRegisterApi()
+        {
+            if (_wiEra == IntPtr.Zero)
+                _wiEra = Fallback(MethodResolver.ByName("_wi", "_ERA"), 0x50F100);
+            if (_wiBra == IntPtr.Zero)
+                _wiBra = Fallback(MethodResolver.ByName("_wi", "_bRA"), 0x511690);
+            if (_c2dReset == IntPtr.Zero)
+                _c2dReset = Fallback(MethodResolver.ByName("Constrained2D", "Reset"), 0x502110);
+            if (_setEnabled != IntPtr.Zero && _getEnabled != IntPtr.Zero) return;
+
+            IntPtr klass = Il2CppInterop.Runtime.IL2CPP.GetIl2CppClass(
+                "UnityEngine.CoreModule.dll", "UnityEngine", "Behaviour");
+            if (klass == IntPtr.Zero) return;
+
+            if (_getEnabled == IntPtr.Zero)
+            {
+                IntPtr entry = Il2CppInterop.Runtime.IL2CPP.il2cpp_class_get_method_from_name(
+                    klass, "get_enabled", 0);
+                if (entry != IntPtr.Zero) _getEnabled = *(IntPtr*)entry;
+            }
+            if (_setEnabled == IntPtr.Zero)
+            {
+                IntPtr entry = Il2CppInterop.Runtime.IL2CPP.il2cpp_class_get_method_from_name(
+                    klass, "set_enabled", 1);
+                if (entry != IntPtr.Zero) _setEnabled = *(IntPtr*)entry;
+            }
+        }
+
+        private static IntPtr Fallback(IntPtr method, int rva) =>
+            method != IntPtr.Zero ? method
+                : GameAssembly.Base == IntPtr.Zero ? IntPtr.Zero : GameAssembly.Base + rva;
+
+        private static void Recompute()
+        {
+            ((delegate* unmanaged[Cdecl]<byte, IntPtr, void>)_wiEra)(1, IntPtr.Zero);
+        }
+
+        private static int LiveCount(List<IntPtr> c2ds)
+        {
+            IntPtr klass = FieldResolver.ClassPointer("_wi");
+            IntPtr statics = klass == IntPtr.Zero ? IntPtr.Zero : FieldResolver.Statics(klass);
+            if (statics == IntPtr.Zero) return -1;
+            var live = new HashSet<IntPtr>();
+            CollectLive(live, Memory.Ptr(statics + 0x90));
+            CollectLive(live, Memory.Ptr(statics + 0x98));
+            int found = 0;
+            foreach (IntPtr c2d in c2ds) if (live.Contains(c2d)) found++;
+            return found;
+        }
+
+        private static void CollectLive(HashSet<IntPtr> live, IntPtr array)
+        {
+            if (!Memory.LooksLikeObject(array)) return;
+            int length = Memory.I32(array + Offsets.Runtime.ArrayLength);
+            if (length <= 0 || length > 0x10000) return;
+
+            for (int i = 0; i < length; i++)
+            {
+                IntPtr entry = Memory.Ptr(array + Offsets.Runtime.ArrayDataOffset + i * IntPtr.Size);
+                if (entry != IntPtr.Zero) live.Add(entry);
+            }
+        }
+
+        private static int SlotOf(IntPtr array, IntPtr c2d)
+        {
+            if (!Memory.LooksLikeObject(array)) return -1;
+            int length = Memory.I32(array + Offsets.Runtime.ArrayLength);
+            if (length <= 0 || length > 0x10000) return -1;
+
+            for (int i = 0; i < length; i++)
+            {
+                IntPtr entry = Memory.Ptr(array + Offsets.Runtime.ArrayDataOffset + i * IntPtr.Size);
+                if (entry == c2d) return i;
+            }
+
+            return -1;
+        }
+
+        private static int MaskIn(IntPtr array, int index)
+        {
+            if (!Memory.LooksLikeObject(array)) return -1;
+            int length = Memory.I32(array + Offsets.Runtime.ArrayLength);
+            if (index < 0 || index >= length) return -1;
+            return Memory.I32(array + Offsets.Runtime.ArrayDataOffset + index * 0x3C + 0x34);
+        }
+
+        private static bool SameList(IntPtr songList)
+        {
+            if (_firstStrip == IntPtr.Zero || songList == IntPtr.Zero) return false;
+
+            try
+            {
+                Transform parent = new Component(_firstStrip).gameObject.transform.parent;
+                if (parent == null) return false;
+
+                IntPtr c2d = ComponentOf(parent.gameObject, ref _constrained2dType,
+                                         "ifapp.Game.UI.Common", "Constrained2D");
+                return c2d == songList;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        private static bool TargetOk(IntPtr card, IntPtr mask)
+        {
+            if (MaskTargetField < 0 || mask == IntPtr.Zero) return false;
+            IntPtr target = Memory.Ptr(card + MaskTargetField);
+            return target != IntPtr.Zero && Memory.Ptr(mask + 0x28) == target;
+        }
+
+        private static void CollectC2ds(Transform at, List<IntPtr> c2ds, int depth)
+        {
+            if (at == null || depth > 4 || c2ds.Count > 512) return;
+
+            IntPtr c2d = ComponentOf(at.gameObject, ref _constrained2dType,
+                                     "ifapp.Game.UI.Common", "Constrained2D");
+            if (c2d != IntPtr.Zero) c2ds.Add(c2d);
+            int children = at.childCount;
+            for (int i = 0; i < children; i++) CollectC2ds(at.GetChild(i), c2ds, depth + 1);
+        }
+
+        private static bool ParentHasC2D(IntPtr c2d)
+        {
+            try
+            {
+                GameObject go = new Component(c2d).gameObject;
+                Transform parent = go != null ? go.transform.parent : null;
+                if (parent == null) return false;
+
+                return ComponentOf(parent.gameObject, ref _constrained2dType,
+                                   "ifapp.Game.UI.Common", "Constrained2D") != IntPtr.Zero;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        private static void CollectRenderers(Transform at, int depth, int index)
+        {
+            if (at == null || depth > 4 || _stripRenderers.Count >= 512) return;
+            GameObject go = at.gameObject;
+            IntPtr c2d = ComponentOf(go, ref _constrained2dType, "ifapp.Game.UI.Common", "Constrained2D");
+            if (c2d != IntPtr.Zero)
+            {
+                Memory.WriteI32(c2d + 0x50, index);
+                _maskWrites++;
+
+                if (_c2dReset == IntPtr.Zero)
+                    _c2dReset = MethodResolver.ByName("Constrained2D", "Reset");
+                if (_c2dReset != IntPtr.Zero)
+                {
+                    ((delegate* unmanaged[Cdecl]<IntPtr, IntPtr, void>)_c2dReset)(c2d, IntPtr.Zero);
+                    _maskResets++;
+                }
+            }
+
+            IntPtr renderer = ComponentOf(go, ref _meshRendererType, "UnityEngine", "MeshRenderer");
+            if (renderer != IntPtr.Zero) _stripRenderers.Add(renderer);
+            int children = at.childCount;
+            for (int i = 0; i < children; i++) CollectRenderers(at.GetChild(i), depth + 1, index);
+        }
+
+        private static string _maskWhere = "";
+        private static bool _maskSaid;
 
         private static bool InstallCard<T>(string type, string method, IntPtr detour,
                                            out NativeHook<T> hook, out T trampoline) where T : Delegate
@@ -413,17 +902,33 @@ namespace CustomSong
         private static void LargeCardDetour(IntPtr self, IntPtr input, IntPtr model, int index)
         {
             Alive(Hook.PackVisual);
+            long cardMark = Timing.Now;
+            CustomSongCore.PageArrived();
             long changesAtBuild = PackText.Changes;
+            long step = Timing.Now;
             ApplyCardTable(self, LargeAssetsField, "large");
-            _stripsHidden.Clear();
-            _saidWindow = false;
-            _appliedPage = int.MinValue;
+            _maskWaiting = true;
+            _registerStrips = true;
+            _maskTries = 0;
+            _stripMask = IntPtr.Zero;
+            _stripRenderers = null;
+            _stripsWritten = 0;
+            _maskWrites = 0;
+            _maskResets = 0;
+            _stripParent = "";
+            _firstStrip = IntPtr.Zero;
+            _pushErrorSaid = false;
+            _materialErrorSaid = false;
+            _maskWhere = "";
+            _maskSaid = false;
             _newTagsDirty = true;
+            step = Timing.Now;
             _largeCardTramp(self, input, model, index);
+            step = Timing.Now;
             ApplyCardTable(self, LargeAssetsField, "large");
             if (PackText.Changes != changesAtBuild) ReplayCards();
             ReportStripCount(self, model);
-            ApplyStripWindow(self);
+            VisitStrips(self);
             ReportCardFonts(self);
             _stripCard = self;
         }
@@ -649,6 +1154,10 @@ namespace CustomSong
             if (!ours) _reportedShipped = true;
             IntPtr strips = Memory.Ptr(card + StripsField);
             int count = Memory.LooksLikeObject(strips) ? Memory.I32(strips + Offsets.Runtime.ArrayLength) : -1;
+
+            ModLog.Warn($"strip row pack {packId}{(ours ? " (ours)" : "")}: " +
+                               $"strips={count} page={Memory.I32(card + StripPageField)} " +
+                               $"songs={SongCount(model)}");
         }
 
         private static int SongCount(IntPtr model)
@@ -718,7 +1227,7 @@ namespace CustomSong
             }
 
             _newTagsDirty = true;
-            ApplyStripWindow(self);
+            VisitStrips(self);
         }
 
         private static bool CardsForAnotherDifficulty(IntPtr packVisual, byte difficulty)

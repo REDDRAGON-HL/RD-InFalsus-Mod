@@ -47,7 +47,6 @@ internal static class Program
                 .Append(' ').Append(item.Value1.ToString(CultureInfo.InvariantCulture))
                 .Append(' ').Append(item.Value2.ToString(CultureInfo.InvariantCulture))
                 .Append('\n');
-
         if (args.Length > 2) File.WriteAllText(args[2], text.ToString(), new UTF8Encoding(false));
         else Console.Write(text.ToString());
         return 0;

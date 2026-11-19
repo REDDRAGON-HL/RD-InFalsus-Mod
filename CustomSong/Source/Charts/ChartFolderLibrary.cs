@@ -98,7 +98,7 @@ namespace CustomSong
             }
             catch (Exception e)
             {
-                ModLog.Warn($"no {FolderName} folder, and one could not be created at {preferred}: " +
+                ModLog.WarnRelease($"no {FolderName} folder, and one could not be created at {preferred}: " +
                                  ModLog.Describe(e));
                 return preferred;
             }
@@ -144,7 +144,7 @@ namespace CustomSong
 
                 if (File.Exists(Path.Combine(folder, "if")))
                 {
-                    ModLog.Warn($"'{name}' is a song directly under Charts; put it inside a pack folder instead");
+                    ModLog.WarnRelease($"'{name}' is a song directly under Charts; put it inside a pack folder instead");
                     continue;
                 }
 
@@ -171,7 +171,7 @@ namespace CustomSong
                     if (!File.Exists(Path.Combine(song, IfReader.InfoFileName)))
                     {
                         string deeper = Nested(song);
-                        ModLog.WarnRelease(deeper == null
+                        ModLog.Warn(deeper == null
                             ? $"chart folder '{Path.GetFileName(song)}' has no if; skipped"
                             : $"chart folder '{Path.GetFileName(song)}' has no if, but its '{deeper}' " +
                               "does; the song is one folder too deep");

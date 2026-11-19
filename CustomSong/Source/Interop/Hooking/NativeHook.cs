@@ -37,7 +37,7 @@ namespace CustomSong
         {
             if (NativeEntry.JumpTarget(target) == IntPtr.Zero) return false;
             string name = MethodResolver.NameOf(target);
-            ModLog.WarnRelease($"a method at 0x{target.ToInt64():X}" +
+            ModLog.Warn($"a method at 0x{target.ToInt64():X}" +
                                (name == null ? string.Empty : $" ({name})") +
                                " was already hooked by another mod; it is left alone instead of " +
                                "stacking a second detour on it");

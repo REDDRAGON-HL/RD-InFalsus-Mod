@@ -48,7 +48,6 @@ namespace CustomSong.Auto
             if (hidden != _lastShape)
             {
                 _lastShape = hidden;
-                ModLog.Load($"autoplay: sky judgement point {hidden}/{Parts.Length} objects off");
             }
         }
 
@@ -75,8 +74,6 @@ namespace CustomSong.Auto
                     NoteFailure(e);
                 }
             }
-
-            ModLog.Load($"autoplay: sky judgement point {restored} object(s) restored");
         }
 
         internal static void KeepOff(IntPtr track)
@@ -113,8 +110,10 @@ namespace CustomSong.Auto
         internal static void NoteFailure(Exception e)        {
             _failures++;
             if (_failures <= 3)
+                {
                 ModLog.Warn($"autoplay: the sky judgement point could not be hidden ({_failures}): " +
                             ModLog.Describe(e));
+                }
         }
 
         internal static void Reset()

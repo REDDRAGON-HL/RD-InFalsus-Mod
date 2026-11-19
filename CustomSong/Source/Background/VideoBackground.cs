@@ -106,10 +106,14 @@ namespace CustomSong
         private static void Park(out string reason)
         {
             if (Flag("get_isPrepared") && !Set("set_time", 1, 0.0, out reason))
+                {
                 ModLog.Warn($"the background video could not be placed for the song: {reason}");
+                }
 
             if (!Call("Pause", 0, _player, out reason))
+                {
                 ModLog.Warn($"the background video could not be held for the song: {reason}");
+                }
         }
 
         private const double ClockSlack = 0.3;
@@ -222,7 +226,7 @@ namespace CustomSong
                 if (!_placeWarned)
                 {
                     _placeWarned = true;
-                    ModLog.WarnRelease(PlaceFailed);
+                    ModLog.Warn(PlaceFailed);
                 }
                 return;
             }
@@ -237,7 +241,7 @@ namespace CustomSong
             if (!Show(_texture, out reason) || !Call("Play", 0, _player, out reason))
             {
                 ModLog.Warn($"the background video could not be started with the song: {reason}");
-                ModLog.WarnRelease(StartFailed);
+                ModLog.Warn(StartFailed);
                 _armed = false;
                 return false;
             }

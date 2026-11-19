@@ -46,7 +46,6 @@ namespace CustomSong
                     if (ChartCatalog.TryServe(name, result))
                     {
                         VaServed++;
-                        ModLog.Load($"chart load: '{Memory.Text(name, 128)}' (served)");
                         return result;
                     }
                 }

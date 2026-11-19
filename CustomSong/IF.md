@@ -13,7 +13,8 @@
   "preview_seconds": ["0", "60"],             //预览音频时间[开始,结束]，以秒计算
   "charter": "charter",                        //谱师
   "chart": "chart.spc",                       //谱面文件（明文 .spc / .json 会自动转换）
-  "lv": 15                                    //谱面难度，必须是 JSON 数字
+  "lv": 15,                                   //谱面难度，必须是 JSON 数字
+  "copyright": "© copyright"             //曲目卡片下方的版权行；为可选参数
 }
 ```
 

@@ -66,8 +66,6 @@ namespace CustomSong
                     };
                     lines.Add(line);
                 }
-
-                ModLog.Load($"showtext: '{Path.GetFileName(path)}' holds {lines.Count} line(s)");
             }
             catch (Exception e)
             {

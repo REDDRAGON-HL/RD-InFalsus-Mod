@@ -2,6 +2,7 @@ using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Il2CppInterop.Runtime.InteropTypes;
+using CustomSong.Replay;
 
 namespace CustomSong.Auto
 {
@@ -9,7 +10,7 @@ namespace CustomSong.Auto
     {
         private static bool Faulted;
         internal static int Faults;
-        internal static bool Writing => AutoSwitch.On && !Faulted;
+        internal static bool Writing => AutoSwitch.On && !Faulted && !ReplayCore.Playing;
         private static bool _asked;
 
         private delegate byte NzFn(IntPtr self, IntPtr noteDict, IntPtr note, byte cursorOnNote,
@@ -38,7 +39,12 @@ namespace CustomSong.Auto
 
             Count(HarmonyHooks.Patch(
                 HarmonyHooks.Target("_VD", "_Oz", "_E"),
-                HarmonyHooks.Handler(typeof(AutoHooks), nameof(OzPrefix))));
+                HarmonyHooks.Handler(typeof(AutoHooks), nameof(OzPrefix)),
+                HarmonyHooks.Handler(typeof(AutoHooks), nameof(OzPostfix))));
+
+            Count(HarmonyHooks.Patch(
+                HarmonyHooks.Target("_VD", "_Qz", "_E"),
+                HarmonyHooks.Handler(typeof(AutoHooks), nameof(QzPrefix))));
 
             Count(Attach(ref _nz, "_VD", "_nz", "_E", 0x5F7A90,
                          (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, IntPtr, IntPtr, byte, IntPtr, IntPtr, byte>)&NzDetour,
@@ -59,7 +65,9 @@ namespace CustomSong.Auto
                 HarmonyHooks.Handler(typeof(AutoHooks), nameof(UpdatePostfix))));
             ModLog.Load($"autoplay: {installed}/{attempted} hooks installed");
             if (installed < attempted)
+                {
                 ModLog.Warn("autoplay: a hook is missing; whatever it drives will silently do nothing");
+                }
         }
 
         internal static void Uninstall()
@@ -92,7 +100,6 @@ namespace CustomSong.Auto
             }
 
             trampoline = hook.Trampoline;
-            ModLog.Load($"autoplay: {type}.{method} hooked");
             return true;
         }
 
@@ -113,12 +120,20 @@ namespace CustomSong.Auto
             {
                 if (!Faulted) AutoSong.Frame(self, __0);
                 else AutoSong.LetGo(self, __0);
+                ReplayCore.Frame(self, __0);
             }
             catch (Exception e)
             {
                 Fault("_Oz", e);
             }
         }
+
+        private static void OzPostfix(Il2CppObjectBase __instance)
+        {
+            ReplayCore.OzPost(HarmonyHooks.Pointer(__instance));
+        }
+
+        private static bool QzPrefix() => !ReplayCore.Playing;
 
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static byte NzDetour(IntPtr self, IntPtr noteDict, IntPtr note, byte cursorOnNote,
@@ -150,6 +165,13 @@ namespace CustomSong.Auto
                 {
                     cursorOnNote = 0;
                 }
+            }
+
+            if (ReplayCore.Playing)
+            {
+                int wish = ReplayCore.Flick(note);
+                if (wish > 0) cursorOnNote = 1;
+                else if (wish < 0) cursorOnNote = 0;
             }
 
             return _nzTramp(self, noteDict, note, cursorOnNote, outGrade, methodInfo);
@@ -220,6 +242,8 @@ namespace CustomSong.Auto
                     Fault("_hb", e);
                 }
             }
+
+            ReplayCore.Hb(AutoSong.Current.Engine, chartTime * 1000.0);
         }
 
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]

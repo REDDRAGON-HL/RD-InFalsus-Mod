@@ -76,8 +76,6 @@ namespace CustomSong
                 WithResults.Add(id);
                 found++;
             }
-
-            ModLog.Load($"custom results: {found} song(s) have a recorded result");
         }
 
         internal static void NoteResult(IntPtr songInfo)
@@ -154,7 +152,6 @@ namespace CustomSong
                 Container = container;
                 Table = table;
                 FilePath = path;
-                ModLog.Load("custom results: " + (exists ? "opened " : "prepared ") + path);
                 ScoreKeys.Migrate(table);
                 if (ScoreKeys.Refiled > 0)
                 {
@@ -190,8 +187,10 @@ namespace CustomSong
                 handle = Il2CppInterop.Runtime.IL2CPP.il2cpp_gchandle_new(obj, false);
                 IntPtr back = Il2CppInterop.Runtime.IL2CPP.il2cpp_gchandle_get_target(handle);
                 if (back != obj)
+                    {
                     ModLog.Warn($"a gc handle answered with 0x{back.ToInt64():X} for an object at " +
                                      $"0x{obj.ToInt64():X}; the custom results are not safe this session");
+                    }
             }
             catch (Exception e)
             {

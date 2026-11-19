@@ -154,7 +154,7 @@ namespace CustomSong
                     continue;
                 }
 
-                string materialKey = packId + "|" + path;
+                string materialKey = packId + "|" + path + "|" + Stamp(path);
                 if (!Built.TryGetValue(materialKey, out IntPtr material))
                 {
                     material = JacketFactory.Cover(path, source, out string reason);
@@ -180,10 +180,17 @@ namespace CustomSong
             return applied;
         }
 
-        internal static void ResetVisualCache()
+        private static string Stamp(string path)
         {
-            Built.Clear();
-            BuiltMaterials.Clear();
+            try
+            {
+                var file = new System.IO.FileInfo(path);
+                return file.Exists ? file.Length.ToString() + "@" + file.LastWriteTimeUtc.Ticks : "-";
+            }
+            catch (Exception)
+            {
+                return "-";
+            }
         }
 
         internal static int Language()
@@ -285,7 +292,9 @@ namespace CustomSong
             IntPtr raised = IntPtr.Zero;
             Il2CppInterop.Runtime.IL2CPP.il2cpp_runtime_invoke(method, packData, null, ref raised);
             if (raised != IntPtr.Zero)
+                {
                 ModLog.Warn($"the game's pack lookup rebuild raised: {Raised.Text(raised)}");
+                }
         }
 
         private static int PackIdTypeMapping = Offsets.Unresolved;

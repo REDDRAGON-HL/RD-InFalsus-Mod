@@ -329,9 +329,8 @@ namespace CustomSong
                 DonorLocalization[family] = localization;
 
                 if (_diagnosed++ == 0)
-                    ModLog.Load($"level labels: the label font is family 0x{family.ToInt64():X} " +
-                                $"(localization {localization}, {assets} asset(s)), taken from " +
-                                $"'{Shorten(WidgetText.Read(fastText))}'");
+                    {
+                    }
             }
             catch (Exception e)
             {
@@ -409,7 +408,7 @@ namespace CustomSong
         private static void Guard(string what, Exception e)
         {
             if (_errors++ > 4) return;
-            ModLog.WarnRelease($"level labels: {what} threw {ModLog.Describe(e)}");
+            ModLog.Warn($"level labels: {what} threw {ModLog.Describe(e)}");
         }
     }
 }

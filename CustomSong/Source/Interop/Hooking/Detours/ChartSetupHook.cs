@@ -77,16 +77,12 @@ namespace CustomSong
             {
                 IntPtr chart = Memory.Ptr(self + ChartSource);
                 if (!Memory.LooksLikeObject(chart)) return;
-
                 IntPtr dict = Memory.Ptr(chart + Auto.AutoOffsets.ChartObject.PlaneArrays);
                 if (!Memory.LooksLikeObject(dict)) return;
-
                 IntPtr entries = Memory.Ptr(dict + Auto.AutoOffsets.Runtime.DictEntries);
                 if (!Memory.LooksLikeObject(entries)) return;
-
                 int capacity = Memory.I32(entries + Auto.AutoOffsets.Runtime.ListSize);
                 if (capacity <= 0 || capacity > 256) return;
-
                 int stride = Auto.AutoOffsets.Note.Size > 0 ? Auto.AutoOffsets.Note.Size : 0x80;
                 IntPtr data = entries + Auto.AutoOffsets.Runtime.ArrayDataOffset;
                 int hidden = 0;
@@ -95,32 +91,28 @@ namespace CustomSong
                 {
                     int slot = i * Auto.AutoOffsets.Runtime.DictEntrySize;
                     if (Memory.I32(data + slot) < 0) continue;
-
                     IntPtr holder = Memory.Ptr(data + slot + Auto.AutoOffsets.Runtime.DictEntryValue);
                     if (!Memory.LooksLikeObject(holder)) continue;
-
                     IntPtr array = Memory.Ptr(holder + Auto.AutoOffsets.PlaneHolder.NoteArray);
                     if (!Memory.LooksLikeObject(array)) continue;
-
                     int slots = Memory.I32(array + Auto.AutoOffsets.Runtime.ListSize);
                     if (slots <= 0 || slots > 200000) continue;
-
                     int size = Memory.I32(holder + Auto.AutoOffsets.PlaneHolder.Count);
                     if (size <= 0 || size > slots) continue;
-
                     IntPtr notes = array + Auto.AutoOffsets.Runtime.ArrayDataOffset;
                     for (int n = 0; n < size; n++)
                     {
                         IntPtr note = notes + n * stride;
                         if ((Memory.I32(note + Auto.AutoOffsets.Note.Flags) & SkyNoteFlag) == 0) continue;
-
                         ZeroBand(note + WidthBand1);
                         ZeroBand(note + WidthBand2);
                         hidden++;
                     }
                 }
 
-                if (hidden > 0) ModLog.Load($"skynote: {hidden} ground square(s) hidden");
+                if (hidden > 0)
+                    {
+                    }
             }
             catch (Exception e)
             {
@@ -135,9 +127,7 @@ namespace CustomSong
         }
 
         private const int WidthBand1 = 0x38;
-
         private const int WidthBand2 = 0x44;
-
         private const int SkyNoteFlag = 0x10000;
 
         private static int Count(IntPtr chart, int slot)

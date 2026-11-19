@@ -32,7 +32,7 @@ namespace CustomSong
                 }
                 catch (Exception e)
                 {
-                    ModLog.Warn($"{asm.GetName().Name} was skipped: {ModLog.Describe(e)}");
+                    ModLog.WarnRelease($"{asm.GetName().Name} was skipped: {ModLog.Describe(e)}");
                     continue;
                 }
 

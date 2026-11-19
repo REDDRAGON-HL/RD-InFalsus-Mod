@@ -2,6 +2,7 @@ using System;
 using System.Runtime.CompilerServices;
 using System.IO;
 using System.Runtime.InteropServices;
+using CustomSong.Replay;
 
 namespace CustomSong.Auto
 {
@@ -23,6 +24,7 @@ namespace CustomSong.Auto
         private static NativeHook<TransitionFn> _transition;
         private static TransitionFn _transitionTramp;
         private static LeaveFn _leave;
+        private static IntPtr _finishInfo;
         internal static long Skips;
         private const string OptInName = ".skip-autoplay-results";
         private static bool? _askedFor;
@@ -44,9 +46,6 @@ namespace CustomSong.Auto
                 }
 
                 _askedFor = found;
-                ModLog.Load(found
-                    ? "autoplay: .skip-autoplay-results is present, so an autoplayed song ends at the song list"
-                    : "autoplay: an autoplayed song ends at the results screen");
                 return found;
             }
         }
@@ -85,7 +84,6 @@ namespace CustomSong.Auto
             else
                 ModLog.WarnRelease("autoplay: GameScene._Ok could not be found; the play will be sent " +
                                    "to the song list without it");
-            ModLog.Load("autoplay: the scene transition is hooked");
         }
 
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
@@ -94,10 +92,14 @@ namespace CustomSong.Auto
         {
             try
             {
-                CustomSongCore.OnSceneTransition(Memory.Text(loadName));
-                if (Memory.Text(unloadName) == ResultsScene) AutoResults.OnLeavingResults();
+                string from = Memory.Text(unloadName);
+                string to = Memory.Text(loadName);
+                CustomSongCore.OnSceneTransition(to);
+                ReplayCore.OnTransition(from, to);
+                if (from == ResultsScene && to == GameplayScene) ReplayScreen.RetryStarting();
+                if (from == ResultsScene) AutoResults.OnLeavingResults();
 
-                if (Redirects(unloadName, loadName, out IntPtr destination))
+                if (Redirects(from, to, out IntPtr destination))
                     return _transitionTramp(self, flags, unloadName, destination,
                                             IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
             }
@@ -111,13 +113,11 @@ namespace CustomSong.Auto
                                     onUnload, onLoaded, onLoadedSecond, onReady);
         }
 
-        private static bool Redirects(IntPtr unloadName, IntPtr loadName, out IntPtr destination)
+        private static bool Redirects(string from, string to, out IntPtr destination)
         {
             destination = IntPtr.Zero;
-            if (!AutoMark.Ran) return false;
+            if (!AutoMark.Ran || ReplayCore.Ran) return false;
             if (!AskedFor) return false;
-            string from = Memory.Text(unloadName);
-            string to = Memory.Text(loadName);
             if (from != GameplayScene || to != ResultsScene) return false;
             _leave?.Invoke(IntPtr.Zero);
             destination = Il2CppInterop.Runtime.IL2CPP.il2cpp_string_new(SongListScene);
@@ -129,9 +129,53 @@ namespace CustomSong.Auto
             }
 
             Skips++;
-            ModLog.Load($"autoplay: the play goes back to the song list instead of the results screen " +
-                        $"({from} -> {SongListScene})");
             return true;
         }
+
+        internal static bool FinishGameplay()
+        {
+            IntPtr scene = Hooks.ChartScene;
+            if (!Memory.LooksLikeObject(scene)) return false;
+
+            if (_finishInfo == IntPtr.Zero)
+            {
+                _finishInfo = MethodResolver.MethodInfoByRuntime("GameScene", "_Zk", "Game.dll",
+                                                                 "ifapp.Game.Scenes", 1);
+                if (_finishInfo == IntPtr.Zero)
+                {
+                    ModLog.WarnRelease("replay: GameScene._Zk could not be found; the replay cannot " +
+                                       "finish the song itself");
+                    return false;
+                }
+            }
+
+            int phase = Memory.I32(scene + GameScenePhase);
+            if (phase != 3)
+            {
+                return false;
+            }
+
+            unsafe
+            {
+                byte arg = 0;
+                IntPtr* args = stackalloc IntPtr[1];
+                args[0] = (IntPtr)(&arg);
+                IntPtr raised = IntPtr.Zero;
+                Il2CppInterop.Runtime.IL2CPP.il2cpp_runtime_invoke(_finishInfo, scene, (void**)args, ref raised);
+
+                if (raised != IntPtr.Zero)
+                {
+                    ModLog.WarnRelease("replay: starting the game's end raised " + Raised.Text(raised));
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        internal static bool GameplayRunning =>
+            Memory.LooksLikeObject(Hooks.ChartScene) &&
+            Memory.I32(Hooks.ChartScene + GameScenePhase) == 3;
+        private const int GameScenePhase = 0x230;
     }
 }

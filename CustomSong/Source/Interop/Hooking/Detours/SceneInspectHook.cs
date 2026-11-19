@@ -160,7 +160,6 @@ namespace CustomSong
 
             bool patched = HarmonyHooks.Patch(awake, null,
                 HarmonyHooks.Handler(typeof(Hooks), nameof(AfterSelectAwake)));
-            if (patched) ModLog.Load("hot reload: the song-select page is watched");
             return patched;
         }
 
@@ -182,6 +181,8 @@ namespace CustomSong
             {
                 ModLog.Warn($"hot reload hook failed: {ModLog.Describe(e)}");
             }
+
+            long mark = CustomSongCore.SongSelectMark;
         }
 
         private static bool _saidAwake;

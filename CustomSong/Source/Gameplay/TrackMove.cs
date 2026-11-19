@@ -332,7 +332,9 @@ namespace CustomSong
         private static void NoteFailure(string where, Exception e)
         {
             if (_failures++ < 3)
+                {
                 ModLog.Warn($"scene rows: trackmove {where} failed: {ModLog.Describe(e)}");
+                }
         }
     }
 }

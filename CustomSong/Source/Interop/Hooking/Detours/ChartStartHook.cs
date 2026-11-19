@@ -11,6 +11,8 @@ namespace CustomSong
         private static NativeHook<RkFn> _rk;
         private static RkFn _rkTramp;
 
+        internal static IntPtr ChartScene { get; private set; }
+
         private static bool InstallChartStart()
         {
             IntPtr target = MethodResolver.ByName("GameScene", "_rk");
@@ -38,7 +40,7 @@ namespace CustomSong
         {
             Alive(Hook.ChartStart);
             ChartStarts++;
-            ModLog.Load("chart start");
+            ChartScene = self;
 
             if (!Faulted)
             {

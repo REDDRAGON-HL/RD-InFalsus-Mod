@@ -48,7 +48,6 @@ namespace CustomSong
         private static IntPtr _textsOwner;
         private static string _written;
         private static bool _mirrored;
-        private static bool _underRow;
         private static float _rowOffsetX;
         private static float _rowOffsetY;
 
@@ -56,11 +55,10 @@ namespace CustomSong
         {
             if (LevelLabelHooks.WatchesTransition)
             {
-                ModLog.Load("chart credit: the transition's refresh is watched");
                 return true;
             }
 
-            ModLog.WarnRelease("chart credit: the transition screen could not be hooked; the " +
+            ModLog.Warn("chart credit: the transition screen could not be hooked; the " +
                                "designer's name has nowhere to go");
             return false;
         }
@@ -99,37 +97,33 @@ namespace CustomSong
 
         private static IntPtr Clone(IntPtr block)
         {
-            if (_clone != IntPtr.Zero)
-            {
-                if (Alive(_clone)) return _clone;
-                _clone = IntPtr.Zero;
-                _texts = null;
-                _mirrored = false;
-            }
-
             var container = new Component(block);
             if (container == null) return IntPtr.Zero;
             GameObject row = container.gameObject;
             if (row == null) return IntPtr.Zero;
-            bool under = row.activeInHierarchy;
-            Transform parent = under ? row.transform : row.transform.parent;
+            Transform parent = row.transform;
             if (parent == null) return IntPtr.Zero;
-            Transform existing = parent.Find(CloneName);
-            GameObject copy = existing != null ? existing.gameObject : null;
 
-            if (copy == null)
+            if (!row.activeInHierarchy)
             {
-                UnityEngineCore::UnityEngine.Object spawned =
-                    UnityEngineCore::UnityEngine.Object.Instantiate(row, parent);
-                if (spawned == null) return IntPtr.Zero;
-                copy = new GameObject(spawned.Pointer);
-                copy.name = CloneName;
-                _underRow = under;
-                _mirrored = false;
+                ForgetWrongCopy(parent);
+                return IntPtr.Zero;
             }
 
+            if (_clone != IntPtr.Zero)
+            {
+                if (Alive(_clone) && ParentedUnder(_clone, parent)) return _clone;
+                ForgetWrongCopy(parent);
+            }
+
+            UnityEngineCore::UnityEngine.Object spawned =
+                UnityEngineCore::UnityEngine.Object.Instantiate(row, parent);
+            if (spawned == null) return IntPtr.Zero;
+            GameObject copy = new GameObject(spawned.Pointer);
+            copy.name = CloneName;
             _clone = copy.Pointer;
             _written = null;
+            _mirrored = false;
             CaptureRowOffset(row.transform);
             FreshSlots(copy.transform);
 
@@ -142,6 +136,40 @@ namespace CustomSong
             if (!copy.activeSelf) copy.SetActive(true);
             Place(copy.transform);
             return _clone;
+        }
+
+        private static bool ParentedUnder(IntPtr copy, Transform row)
+        {
+            try
+            {
+                var at = new GameObject(copy).transform;
+                Transform parent = at != null ? at.parent : null;
+                return parent != null && parent.Pointer == row.Pointer;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        private static void ForgetWrongCopy(Transform row)
+        {
+            if (_clone != IntPtr.Zero)
+            {
+                try
+                {
+                    if (Alive(_clone) && !ParentedUnder(_clone, row))
+                        UnityEngineCore::UnityEngine.Object.Destroy(new GameObject(_clone));
+                }
+                catch (Exception)
+                {
+                }
+            }
+
+            _clone = IntPtr.Zero;
+            _texts = null;
+            _written = null;
+            _mirrored = false;
         }
 
         private static void CaptureRowOffset(Transform row)
@@ -158,8 +186,8 @@ namespace CustomSong
             {
                 IntPtr node = Constrained(copy);
                 if (node == IntPtr.Zero) return;
-                float x = (_underRow ? -2f * _rowOffsetX : -_rowOffsetX) + MirrorShift;
-                float y = _underRow ? 0f : _rowOffsetY;
+                float x = -2f * _rowOffsetX + MirrorShift;
+                float y = 0f;
                 Memory.WriteF32(node + C2dOffset, x);
                 Memory.WriteF32(node + C2dOffset + 4, y);
                 WidgetText.Relayout(node);
@@ -369,7 +397,7 @@ namespace CustomSong
         private static void Guard(string what, Exception e)
         {
             if (_errors++ > 4) return;
-            ModLog.WarnRelease($"chart credit: {what} threw {ModLog.Describe(e)}");
+            ModLog.Warn($"chart credit: {what} threw {ModLog.Describe(e)}");
         }
     }
 }

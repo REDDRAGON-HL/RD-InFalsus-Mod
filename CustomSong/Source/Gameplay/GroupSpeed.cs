@@ -150,16 +150,11 @@ namespace CustomSong
         {
             Sync();
             _calls++;
-
             if (_calls != 1 && _calls != 2 && _calls != 120 && _calls != 600) return;
 
             IntPtr render = Memory.LooksLikeObject(_track)
                 ? Memory.Ptr(_track + TrackRenderTable)
                 : IntPtr.Zero;
-
-            ModLog.Load($"timing warp: _hb #{_calls} curves={_curves.Count} " +
-                        $"lists=0x{laneLists.ToInt64():X} render=0x{render.ToInt64():X} " +
-                        $"match={render == laneLists}");
         }
 
         internal static bool IsRenderPass(IntPtr laneLists)
@@ -171,8 +166,6 @@ namespace CustomSong
             if (!_probed)
             {
                 _probed = true;
-                ModLog.Load($"timing warp: _hb lists=0x{laneLists.ToInt64():X} " +
-                            $"render table=0x{renderTable.ToInt64():X} match={match}");
             }
 
             return match;
@@ -252,11 +245,11 @@ namespace CustomSong
 
                 _applied = true;
                 if (_reports++ < 4)
-                    ModLog.Load($"timing warp: {warped} note(s) at {nowMs:F0}ms, " +
-                                $"{_curves.Count} group curve(s)" +
-                                (_fallback != null ? ", one as the default group's" : ""));
+                    {
+                    }
                 else if (++_applies % 240 == 0)
-                    ModLog.Load($"timing warp: still warping — {warped} note(s) at {nowMs:F0}ms");
+                    {
+                    }
             }
             catch (Exception e)
             {
@@ -322,8 +315,8 @@ namespace CustomSong
             Curve only = !claimed && _curves.Count == 1 ? FirstCurve() : null;
             _fallback = only == null ? null : Merge(_global, only);
             if (_fallback != null)
-                ModLog.Load("timing warp: no note names a group; the chart's only curve joins its " +
-                            "own timeline as the default group's");
+                {
+                }
             return true;
         }
 
@@ -377,7 +370,8 @@ namespace CustomSong
                 curve.Add(row.Time, row.X);
 
                 if (_reports++ < 8)
-                    ModLog.Load($"timing warp: group {group} x{row.X:F3} at {row.Time}ms");
+                    {
+                    }
             }
         }
 
@@ -397,7 +391,9 @@ namespace CustomSong
         private static void NoteFailure(string where, Exception e)
         {
             if (_failures++ < 3)
+                {
                 ModLog.Warn($"timing warp {where} failed: {ModLog.Describe(e)}");
+                }
         }
     }
 }

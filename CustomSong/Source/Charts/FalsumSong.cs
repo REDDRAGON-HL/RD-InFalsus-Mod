@@ -24,19 +24,17 @@ namespace CustomSong
                 if (!File.Exists(Path.Combine(folder, ProjectFileName)))
                 {
                     ZipFile.ExtractToDirectory(archive, folder, true);
-                    ModLog.Load($"'{Path.GetFileName(archive)}': unpacked into '{Path.GetFileName(folder)}'");
                 }
 
                 JsonNode document = Build(folder, out string reason);
                 if (document == null)
                 {
-                    ModLog.WarnRelease($"'{Path.GetFileName(folder)}': its {ProjectFileName} could not be " +
+                    ModLog.Warn($"'{Path.GetFileName(folder)}': its {ProjectFileName} could not be " +
                                        $"used: {reason}");
                     return;
                 }
 
                 File.WriteAllText(ifPath, StudioProject.Serialize(document), new UTF8Encoding(false));
-                ModLog.Load($"'{Path.GetFileName(folder)}': wrote an if from its {ProjectFileName}");
             }
             catch (Exception e)
             {
@@ -165,7 +163,6 @@ namespace CustomSong
             if (!string.Equals(source, target, StringComparison.OrdinalIgnoreCase) && !File.Exists(target))
             {
                 File.Move(source, target);
-                ModLog.Load($"'{Path.GetFileName(folder)}': moved '{name}' out of {Path.GetDirectoryName(relative)}");
             }
 
             return name;

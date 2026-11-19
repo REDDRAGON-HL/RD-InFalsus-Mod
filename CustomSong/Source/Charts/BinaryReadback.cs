@@ -10,14 +10,11 @@ namespace CustomSong
         private const int AudioOffsetMagic = 0x414F46;
         private const int SceneControlMagic = 0x53434E;
         private const int SetColorMagic = 0x434F4C;
-
         private const int TrackDisplayMode = 1;
         private const int HideGroupMode = 2;
-
         private const uint TimingGroupNoInput = 0x80000000;
         private const uint TimingGroupNoClip = 0x40000000;
         private const uint TimingGroupMask = 0x1FFFFFFF;
-
         private const int NoteStride = 0x80;
         private const int NoteLine = 0x08;
         private const int NoteType = 0x14;
@@ -50,7 +47,6 @@ namespace CustomSong
                     }
 
                     if (note.Type == 3) continue;
-
                     uint packed = (uint)((ulong)note.Line >> 32);
                     if (packed != 0)
                         groups[note.Id] = (int)(packed & TimingGroupMask) |
@@ -67,7 +63,6 @@ namespace CustomSong
                 foreach (Icp1Reader.Event item in chart.Events)
                 {
                     if (item.Type != 0 && item.Type != 5) continue;
-
                     double multiplier = item.Number;
                     if (double.IsNaN(multiplier) || double.IsInfinity(multiplier)) continue;
 
@@ -88,11 +83,6 @@ namespace CustomSong
 
                 SceneDirectives.Publish(seed, directives, groups, skyGroups,
                                         new List<SceneDirectives.SkyVisual>(), null);
-
-                ModLog.Load($"encrypted chart '{seed}': {directives.Count} scene row(s), " +
-                            $"{groups.Count} timing-group note(s) read back" +
-                            (noInputNotes > 0 ? $"; {noInputNotes} noinput note(s) cannot be removed " +
-                                                "from an encrypted chart yet" : ""));
             }
             catch (Exception e)
             {
@@ -121,6 +111,7 @@ namespace CustomSong
                             Kind = SceneDirectives.Kind.TrackDisplay,
                             Time = note.Start,
                             Group = (int)(uint)note.Line,
+
                             Value = note.End,
                             Mode = note.Num[0],
                         };
@@ -133,7 +124,6 @@ namespace CustomSong
                             Group = (int)(uint)note.Line,
                             Value = note.End,
                         };
-
                     return null;
                 }
 
@@ -181,7 +171,6 @@ namespace CustomSong
             IntPtr notes = Memory.Ptr(tuple + Offsets.Runtime.ChartTupleNotes);
             if (!Memory.TryList(notes, out IntPtr data, out int count)) return;
             if (count <= 0 || count > 200000) return;
-
             int stride = ChartCodec.NoteSize;
             if (stride <= 0)
             {
@@ -189,7 +178,6 @@ namespace CustomSong
                 stride = bytes > 0 && bytes % count == 0 ? (int)(bytes / count) : NoteStride;
             }
             if (stride < NoteLine + 8) return;
-
             var seen = new HashSet<long>();
             bool repeated = false;
 
@@ -198,13 +186,11 @@ namespace CustomSong
                 IntPtr note = data + i * stride;
                 int type = Memory.I32(note + NoteType);
                 if (type != 1 && type != 2) continue;
-
                 long line = (long)((ulong)Memory.I64(note + NoteLine) & 0xFFFFFFFF);
                 if (!seen.Add(line)) repeated = true;
             }
 
             if (!repeated) return;
-
             long next = 1000;
             int renumbered = 0;
 
@@ -213,15 +199,11 @@ namespace CustomSong
                 IntPtr note = data + i * stride;
                 int type = Memory.I32(note + NoteType);
                 if (type != 1 && type != 2) continue;
-
                 ulong packed = (ulong)Memory.I64(note + NoteLine);
                 Memory.WriteI64(note + NoteLine,
                     (long)((packed & 0xFFFFFFFF00000000UL) | ((ulong)next++ & 0xFFFFFFFF)));
                 renumbered++;
             }
-
-            ModLog.Load($"encrypted chart '{seed}': {renumbered} ground note(s) renumbered " +
-                        "(their lines repeated, which silences their hit sounds)");
         }
     }
 }

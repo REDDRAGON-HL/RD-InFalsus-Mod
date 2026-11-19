@@ -1,4 +1,5 @@
 using System;
+using CustomSong.Replay;
 
 namespace CustomSong.Auto
 {
@@ -28,13 +29,13 @@ namespace CustomSong.Auto
             if (lnp != Current._owner)
             {
                 AutoMark.Ran = false;
-                ModLog.Load($"autoplay: chart start ({(AutoSwitch.On ? "on" : "off")})");
                 AutoResults.BlockParticles(AutoSwitch.On);
                 IntPtr engine = Current.Engine;
                 double tickSeconds = Current.TickSeconds;
                 Current = new AutoSong(lnp, Current.Floor);
                 Current.Engine = engine;
                 Current.TickSeconds = tickSeconds;
+                ReplayCore.OnSong();
             }
 
             Current.Chart.TryLoad(lnp, chartSeconds * 1000.0);
@@ -55,7 +56,11 @@ namespace CustomSong.Auto
             double dropMs = Current._lastMs - nowMs;
 
             if (Current._lastMs >= 0.0 && dropMs > RewindMs && IsRestart(Current.Chart, dropMs, nowMs))
+            {
                 Current = new AutoSong(Current._owner, Current.Floor);
+                ReplayCore.OnSong();
+            }
+
             AutoSong song = Current;
             song._lastMs = nowMs;
             song.TickSeconds = seconds;

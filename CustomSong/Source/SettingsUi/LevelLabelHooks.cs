@@ -63,7 +63,6 @@ namespace CustomSong
             Count(InstallTransition());
             installed = took;
             attempted = tried;
-            ModLog.Load($"level labels: {took}/{tried} place(s) of the level are watched");
             return took > 0;
         }
 
@@ -93,7 +92,7 @@ namespace CustomSong
         {
             if (target == IntPtr.Zero)
             {
-                ModLog.WarnRelease($"level labels: {label} was not found; that place keeps its number");
+                ModLog.Warn($"level labels: {label} was not found; that place keeps its number");
                 return false;
             }
 
@@ -292,7 +291,7 @@ namespace CustomSong
                 IntPtr now = NativeEntry.JumpTarget(target);
                 if (now == IntPtr.Zero || now == thunk) continue;
                 _reported = true;
-                ModLog.WarnRelease($"level labels: another mod hooked 0x{target.ToInt64():X} over this " +
+                ModLog.Warn($"level labels: another mod hooked 0x{target.ToInt64():X} over this " +
                                    "one. A second detour on the same function recurses until the stack " +
                                    "ends — remove the older plugin (ChartDesignerCredit / SpecialLevel); " +
                                    "their features are part of this mod now.");
@@ -303,7 +302,7 @@ namespace CustomSong
         private static void Guard(string what, Exception e)
         {
             if (_errors++ > 4) return;
-            ModLog.WarnRelease($"level labels: {what} threw {ModLog.Describe(e)}");
+            ModLog.Warn($"level labels: {what} threw {ModLog.Describe(e)}");
         }
     }
 }

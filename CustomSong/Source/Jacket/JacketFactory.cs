@@ -126,8 +126,10 @@ namespace CustomSong
                 return IntPtr.Zero;
             }
 
+            long mark = Timing.Now;
             Png.Image image = DecodeFile(pngPath, out reason);
             if (image == null) return IntPtr.Zero;
+            mark = Timing.Now;
             IntPtr texture = BuildTexture(image, out reason);
             if (texture == IntPtr.Zero) return IntPtr.Zero;
             IntPtr material = BuildMaterial(texture, what, out reason);
@@ -601,7 +603,9 @@ namespace CustomSong
             }
 
             if (_format == 0)
+                {
                 ModLog.Warn("the device reports no support for any texture format a jacket can use");
+                }
             return _format;
         }
 

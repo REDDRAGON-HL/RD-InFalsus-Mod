@@ -26,7 +26,7 @@ namespace CustomSong
             catch (Exception e)
             {
                 _failed = true;
-                ModLog.WarnRelease("AUTO overlay: the switch could not be drawn: " + ModLog.Describe(e));
+                ModLog.Warn("AUTO overlay: the switch could not be drawn: " + ModLog.Describe(e));
             }
         }
 
@@ -72,7 +72,7 @@ namespace CustomSong
             catch (Exception e)
             {
                 _failed = true;
-                ModLog.WarnRelease($"AUTO overlay: the {what} could not be drawn: " + ModLog.Describe(e));
+                ModLog.Warn($"AUTO overlay: the {what} could not be drawn: " + ModLog.Describe(e));
             }
         }
     }

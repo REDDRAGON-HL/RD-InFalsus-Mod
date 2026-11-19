@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 
 namespace CustomSong
 {
@@ -37,6 +39,68 @@ namespace CustomSong
 
         private const int SideMin = 1;
         private const int SideMax = 4;
+
+        internal static bool TryDecodeCached(string path, string seed, IntPtr tuple32, out string reason)
+        {
+            if (!Decided.TryGetValue(path, out Verdict known))
+            {
+                known = new Verdict { Size = -1, Ticks = -1 };
+            }
+            else
+            {
+                try
+                {
+                    var file = new FileInfo(path);
+                    if (file.Length == known.Size && file.LastWriteTimeUtc.Ticks == known.Ticks)
+                    {
+                        reason = known.Reason;
+                        return reason == null;
+                    }
+                }
+                catch (Exception)
+                {
+                }
+            }
+
+            byte[] bytes;
+            try
+            {
+                bytes = File.ReadAllBytes(path);
+            }
+            catch (Exception e)
+            {
+                reason = "the file could not be read: " + ModLog.Describe(e);
+                return false;
+            }
+
+            bool ok = TryDecode(bytes, seed, tuple32, out reason);
+
+            try
+            {
+                var file = new FileInfo(path);
+                Decided[path] = new Verdict
+                {
+                    Size = file.Length,
+                    Ticks = file.LastWriteTimeUtc.Ticks,
+                    Reason = ok ? null : reason,
+                };
+            }
+            catch (Exception)
+            {
+            }
+
+            return ok;
+        }
+
+        private sealed class Verdict
+        {
+            internal long Size;
+            internal long Ticks;
+            internal string Reason;
+        }
+
+        private static readonly Dictionary<string, Verdict> Decided =
+            new Dictionary<string, Verdict>(StringComparer.OrdinalIgnoreCase);
 
         internal static bool TryDecode(byte[] bytes, string seed, IntPtr tuple32, out string reason)
         {
@@ -144,7 +208,10 @@ namespace CustomSong
                 if (stride > 0)
                 {
                     if (_noteSize > 0 && stride != _noteSize)
+                        {
                         ModLog.Warn($"note records measure {stride} bytes, not the {_noteSize} measured before");
+                        }
+
                     _noteSize = stride;
                     return true;
                 }

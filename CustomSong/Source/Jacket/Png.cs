@@ -103,7 +103,7 @@ namespace CustomSong
             byte[] raw;
             try
             {
-                raw = Inflate(compressed.ToArray());
+                raw = Inflate(compressed.GetBuffer(), 2, (int)compressed.Length - 2);
             }
             catch (Exception e)
             {
@@ -146,10 +146,10 @@ namespace CustomSong
             }
         }
 
-        private static byte[] Inflate(byte[] zlib)
+        private static byte[] Inflate(byte[] zlib, int offset, int count)
         {
-            if (zlib.Length < 2) throw new InvalidDataException("no zlib data");
-            using var input = new MemoryStream(zlib, 2, zlib.Length - 2);
+            if (count < 0) throw new InvalidDataException("no zlib data");
+            using var input = new MemoryStream(zlib, offset, count);
             using var inflate = new DeflateStream(input, CompressionMode.Decompress);
             using var output = new MemoryStream();
             inflate.CopyTo(output);
@@ -167,24 +167,47 @@ namespace CustomSong
                 int to = y * stride;
                 int up = to - stride;
 
-                for (int x = 0; x < stride; x++)
+                switch (filter)
                 {
-                    int value = raw[from + x];
-                    int left = x >= channels ? pixels[to + x - channels] : 0;
-                    int above = y > 0 ? pixels[up + x] : 0;
-                    int aboveLeft = y > 0 && x >= channels ? pixels[up + x - channels] : 0;
+                    case 0:
+                        Buffer.BlockCopy(raw, from, pixels, to, stride);
+                        break;
 
-                    switch (filter)
-                    {
-                        case 0: break;
-                        case 1: value += left; break;
-                        case 2: value += above; break;
-                        case 3: value += (left + above) >> 1; break;
-                        case 4: value += Paeth(left, above, aboveLeft); break;
-                        default: throw new InvalidDataException($"row {y} has filter {filter}");
-                    }
+                    case 1:
+                        for (int x = 0; x < stride; x++)
+                        {
+                            int left = x >= channels ? pixels[to + x - channels] : 0;
+                            pixels[to + x] = (byte)(raw[from + x] + left);
+                        }
+                        break;
 
-                    pixels[to + x] = (byte)value;
+                    case 2:
+                        if (y == 0) { Buffer.BlockCopy(raw, from, pixels, to, stride); break; }
+                        for (int x = 0; x < stride; x++)
+                            pixels[to + x] = (byte)(raw[from + x] + pixels[up + x]);
+                        break;
+
+                    case 3:
+                        for (int x = 0; x < stride; x++)
+                        {
+                            int left = x >= channels ? pixels[to + x - channels] : 0;
+                            int above = y > 0 ? pixels[up + x] : 0;
+                            pixels[to + x] = (byte)(raw[from + x] + ((left + above) >> 1));
+                        }
+                        break;
+
+                    case 4:
+                        for (int x = 0; x < stride; x++)
+                        {
+                            int left = x >= channels ? pixels[to + x - channels] : 0;
+                            int above = y > 0 ? pixels[up + x] : 0;
+                            int aboveLeft = y > 0 && x >= channels ? pixels[up + x - channels] : 0;
+                            pixels[to + x] = (byte)(raw[from + x] + Paeth(left, above, aboveLeft));
+                        }
+                        break;
+
+                    default:
+                        throw new InvalidDataException($"row {y} has filter {filter}");
                 }
 
                 from += stride;
@@ -207,52 +230,72 @@ namespace CustomSong
                                      int channels, byte[] palette, out string reason)
         {
             reason = null;
-            var rgba = new byte[width * height * 4];
             int count = width * height;
+            if (colourType == 6 && channels == 4) return pixels;
+            var rgba = new byte[count * 4];
 
-            for (int i = 0; i < count; i++)
+            switch (colourType)
             {
-                int src = i * channels;
-                int dst = i * 4;
-
-                switch (colourType)
-                {
-                    case 0:
-                        rgba[dst] = rgba[dst + 1] = rgba[dst + 2] = pixels[src];
+                case 0:
+                    for (int i = 0; i < count; i++)
+                    {
+                        byte grey = pixels[i];
+                        int dst = i * 4;
+                        rgba[dst] = rgba[dst + 1] = rgba[dst + 2] = grey;
                         rgba[dst + 3] = 255;
-                        break;
+                    }
+                    break;
 
-                    case 2:
+                case 2:
+                    for (int i = 0; i < count; i++)
+                    {
+                        int src = i * 3;
+                        int dst = i * 4;
                         rgba[dst] = pixels[src];
                         rgba[dst + 1] = pixels[src + 1];
                         rgba[dst + 2] = pixels[src + 2];
                         rgba[dst + 3] = 255;
-                        break;
+                    }
+                    break;
 
-                    case 3:
-                        int entry = pixels[src] * 3;
+                case 3:
+                    for (int i = 0; i < count; i++)
+                    {
+                        int entry = pixels[i] * 3;
                         if (entry + 2 >= palette.Length)
                         {
                             return null;
                         }
+
+                        int dst = i * 4;
                         rgba[dst] = palette[entry];
                         rgba[dst + 1] = palette[entry + 1];
                         rgba[dst + 2] = palette[entry + 2];
                         rgba[dst + 3] = 255;
-                        break;
+                    }
+                    break;
 
-                    case 4:
+                case 4:
+                    for (int i = 0; i < count; i++)
+                    {
+                        int src = i * 2;
+                        int dst = i * 4;
                         rgba[dst] = rgba[dst + 1] = rgba[dst + 2] = pixels[src];
                         rgba[dst + 3] = pixels[src + 1];
-                        break;
+                    }
+                    break;
 
-                    default:
+                default:
+                    for (int i = 0; i < count; i++)
+                    {
+                        int src = i * 4;
+                        int dst = i * 4;
                         rgba[dst] = pixels[src];
                         rgba[dst + 1] = pixels[src + 1];
                         rgba[dst + 2] = pixels[src + 2];
                         rgba[dst + 3] = pixels[src + 3];
-                        break;
-                }
+                    }
+                    break;
             }
 
             return rgba;

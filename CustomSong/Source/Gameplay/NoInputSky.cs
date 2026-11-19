@@ -286,8 +286,9 @@ namespace CustomSong
                 entry.ShadowArea = Area(entry.Shadow, track);
 
                 if (_built++ < 3)
-                    ModLog.Load($"scene rows: noinput bar {id} built (band=0x{entry.Band.ToInt64():X}, " +
-                                $"shadow=0x{entry.Shadow.ToInt64():X})");
+                    {
+                    }
+
                 return entry;
             }
             catch (Exception e)
@@ -323,13 +324,11 @@ namespace CustomSong
             try
             {
                 if (_prefabSide < 0) return null;
-
                 IntPtr prefab = Memory.Ptr(track + _prefabSide);
                 IntPtr container = Memory.Ptr(track + _notesContainer);
 
                 if (!Memory.LooksLikeObject(prefab) || !Memory.LooksLikeObject(container))
                     return null;
-
                 var parent = new Transform(container);
                 if (parent == null) return null;
 
@@ -338,11 +337,12 @@ namespace CustomSong
                     Band = Spawn(prefab, parent, $"CustomSongSkyNote_{visual.Id}"),
                 };
                 if (entry.Band == IntPtr.Zero) return null;
-
                 entry.BandTransform = new GameObject(entry.Band).transform.Pointer;
                 StripGlow(entry.Band);
 
-                if (_built++ < 6) ModLog.Load($"scene rows: skynote marker {visual.Id} built");
+                if (_built++ < 6)
+                    {
+                    }
 
                 return entry;
             }
@@ -365,23 +365,20 @@ namespace CustomSong
                 foreach (Transform part in parts)
                 {
                     if (part == null) continue;
-
                     string name = part.name ?? "";
                     if (name.Length == 0) continue;
-
                     if (_markers < 2 && names.Length < 200) names.Append(name).Append(", ");
-
                     string lower = name.ToLowerInvariant();
                     if (!lower.Contains("guide") && !lower.Contains("glow") && !lower.Contains("effect")) continue;
-
                     GameObject child = part.gameObject;
                     if (child == null) continue;
-
                     child.SetActive(false);
                     off++;
                 }
 
-                if (_markers++ < 2) ModLog.Load($"scene rows: skynote marker children [{names}] off={off}");
+                if (_markers++ < 2)
+                    {
+                    }
             }
             catch (Exception e)
             {
@@ -593,7 +590,6 @@ namespace CustomSong
                 return false;
             }
 
-            ModLog.Load("scene rows: SkySafeArea._KZ is available");
             return true;
         }
 
@@ -645,7 +641,9 @@ namespace CustomSong
         private static void NoteFailure(string where, Exception e)
         {
             if (_failures++ < 3)
+                {
                 ModLog.Warn($"scene rows: noinput bar {where} failed: {ModLog.Describe(e)}");
+                }
         }
     }
 }

@@ -37,7 +37,6 @@ namespace CustomSong
                 HarmonyHooks.Target("_zf", "_RFA", "_J"),
                 null,
                 HarmonyHooks.Handler(typeof(AudioOffset), nameof(Capture)));
-            ModLog.Load($"audiooffset: {(ok ? 1 : 0)}/1 hook installed");
         }
 
         private static void Capture(Il2CppInterop.Runtime.InteropTypes.Il2CppObjectBase __result,
@@ -87,7 +86,8 @@ namespace CustomSong
                     state.Released = true;
 
                     if (_reports++ < 6)
-                        ModLog.Load($"audiooffset: released after {offset}ms");
+                        {
+                        }
                 }
             }
         }
@@ -101,8 +101,32 @@ namespace CustomSong
 
         internal static void Forget()
         {
-            _channels.Clear();
+            _channels.RemoveAll(c => !Memory.LooksLikeObject(c.Controller));
             _reports = 0;
+        }
+
+        internal static bool FinishNow()
+        {
+            SetPositionFn call = SetPosition();
+            if (call == null) return false;
+
+            for (int i = _channels.Count - 1; i >= 0; i--)
+            {
+                Channel state = _channels[i];
+                if (!Memory.LooksLikeObject(state.Controller)) continue;
+                IntPtr channel = Memory.Ptr(state.Controller + ControllerChannel);
+                if (!Memory.LooksLikeObject(channel)) continue;
+                int result = call(channel, 24u * 60u * 60u * 1000u, TimeUnitMs);
+                if (result != 0)
+                {
+                    ModLog.Warn($"replay: moving the song to its end returned {result}");
+                    return false;
+                }
+
+                return true;
+            }
+
+            return false;
         }
 
         private static void Seek(IntPtr channel, uint position)
@@ -111,7 +135,9 @@ namespace CustomSong
             if (call == null) return;
             int result = call(channel, position, TimeUnitMs);
             if (result != 0 && _failures++ < 3)
+                {
                 ModLog.Warn($"audiooffset: Channel_SetPosition returned {result}");
+                }
         }
 
         private static void Paused(IntPtr channel, bool paused)
@@ -120,7 +146,9 @@ namespace CustomSong
             if (call == null) return;
             int result = call(channel, paused ? 1 : 0);
             if (result != 0 && _failures++ < 3)
+                {
                 ModLog.Warn($"audiooffset: Channel_SetPaused returned {result}");
+                }
         }
 
         private static SetPositionFn SetPosition()

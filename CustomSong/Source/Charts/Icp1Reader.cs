@@ -71,7 +71,6 @@ namespace CustomSong
                 Bpm = F32(file, 20),
                 Meter = F32(file, 24),
             };
-
             Icp1Writer.State state = Icp1Writer.State.Seed(key, notes);
             var scaled = new int[8];
             var raw = new int[8];
@@ -80,7 +79,6 @@ namespace CustomSong
             for (int i = 0; i < notes; i++)
             {
                 int at = HeaderSize + i * NoteSize;
-
                 long id = (long)(U64(file, at) - state.Field(i, 0));
                 long line = (long)(U64(file, at + 0x08) - state.Field(i, 1));
                 int start = (int)(U32(file, at + 0x10) - state.Field(i, 2));
@@ -135,7 +133,6 @@ namespace CustomSong
         internal static byte[] FlattenDefaultSpeeds(byte[] file, string key)
         {
             if (!TryRead(file, key, out Icp1Reader chart, out _)) return file;
-
             var claimed = new HashSet<int>();
             foreach (Note note in chart.Notes)
             {
@@ -148,15 +145,12 @@ namespace CustomSong
             {
                 Event item = chart.Events[i];
                 if (item.Type != 5) continue;
-
                 int group = (int)BitConverter.Int32BitsToSingle((int)(uint)item.Value2);
                 if (claimed.Contains(group)) continue;
-
                 flatten.Add(i);
             }
 
             if (flatten.Count == 0) return file;
-
             byte[] copy = (byte[])file.Clone();
             int baseAt = HeaderSize + chart.Notes.Count * NoteSize;
             foreach (int index in flatten)
@@ -168,21 +162,20 @@ namespace CustomSong
                 copy[at + 3] = 0;
             }
 
-            ModLog.Load($"encrypted chart '{key}': {flatten.Count} default-group speed event(s) " +
-                        "turned into the chart's own timeline");
             return copy;
         }
 
         private static void ScalePair(int scaleRaw, int numRaw, int denRaw, out int num, out int den)
         {
-            long scale = scaleRaw;
-            long n = numRaw;
-            long d = denRaw;
-
+            long scale = S32(scaleRaw);
+            long n = S32(numRaw);
+            long d = S32(denRaw);
             long g = Gcd(n, d);
             num = (int)(scale * (n / g));
             den = (int)(scale * (d / g));
         }
+
+        private static long S32(int v) => v;
 
         private static long Gcd(long a, long b)
         {

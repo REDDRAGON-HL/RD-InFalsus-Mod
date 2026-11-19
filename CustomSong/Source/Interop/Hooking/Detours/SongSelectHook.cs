@@ -70,6 +70,12 @@ namespace CustomSong
         {
             Alive(Hook.PreviewRecord);
 
+            if (!_saidRecord)
+            {
+                _saidRecord = true;
+                long mark = CustomSongCore.SongSelectMark;
+            }
+
             if (!Faulted)
             {
                 try
@@ -85,6 +91,8 @@ namespace CustomSong
             _previewTrampoline(self, songInfo, methodInfo);
             Hooks.ResumeStripWindow();
         }
+
+        private static bool _saidRecord;
 
         private static void DetachSongSelect()
         {

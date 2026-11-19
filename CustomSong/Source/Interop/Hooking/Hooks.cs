@@ -30,22 +30,28 @@ namespace CustomSong
 
             void Count(bool ok) { attempted++; if (ok) installed++; }
 
-            Count(InstallChartLoad());
-            Count(InstallChartStart());
-            Count(InstallChartSetup());
-            Count(InstallPause());
-            Count(InstallAudioLoad());
-            Count(InstallJacket());
-            Count(InstallSongSelect());
-            Count(InstallDifficultyState());
-            Count(InstallPackVisual());
-            Count(InstallScoreStore());
-            Count(InstallResultsUnlock());
-            Count(InstallPlayGate());
-            Count(InstallSceneSwitch());
-            Count(InstallSelectAwake());
-            Count(InstallFont());
-            Count(ClearScore.Install());
+            void Timed(string what, Func<bool> install)
+            {
+                long mark = Timing.Now;
+                Count(install());
+            }
+
+            Timed("chart load", InstallChartLoad);
+            Timed("chart start", InstallChartStart);
+            Timed("chart setup", InstallChartSetup);
+            Timed("pause", InstallPause);
+            Timed("audio load", InstallAudioLoad);
+            Timed("jacket", InstallJacket);
+            Timed("song select", InstallSongSelect);
+            Timed("difficulty state", InstallDifficultyState);
+            Timed("pack visual", InstallPackVisual);
+            Timed("score store", InstallScoreStore);
+            Timed("results unlock", InstallResultsUnlock);
+            Timed("play gate", InstallPlayGate);
+            Timed("scene switch", InstallSceneSwitch);
+            Timed("select awake", InstallSelectAwake);
+            Timed("font", InstallFont);
+            Timed("clear score", ClearScore.Install);
 
             WidgetText.Resolve(
                 Il2CppInterop.Runtime.IL2CPP.GetIl2CppClass("FastText.dll", "FastText", "FastText"),
@@ -59,7 +65,9 @@ namespace CustomSong
             Attempted = attempted;
             ModLog.Load($"{installed}/{attempted} hooks installed");
             if (installed < attempted)
+                {
                 ModLog.Warn("a hook is missing; whatever it drives will silently do nothing");
+                }
         }
 
         internal static void Uninstall()
@@ -137,7 +145,7 @@ namespace CustomSong
 
         private static void NotLanded(Hook hook)
         {
-            ModLog.WarnRelease($"{Name(hook)} was attached but its first bytes are unchanged; the detour " +
+            ModLog.Warn($"{Name(hook)} was attached but its first bytes are unchanged; the detour " +
                                "is not in place, and whatever it answers for will silently do nothing");
         }
 
@@ -149,8 +157,6 @@ namespace CustomSong
             {
                 if (!_alive.Add(name)) return;
             }
-
-            ModLog.Load($"{name} is live");
         }
 
         internal static void Alive(Hook hook) => Alive(Name(hook));

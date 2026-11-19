@@ -138,7 +138,6 @@ namespace CustomSong
                 if (!_reported)
                 {
                     _reported = true;
-                    ModLog.Load($"showtext: {_active.Count} line(s) drawn");
                 }
             }
             catch (Exception e)

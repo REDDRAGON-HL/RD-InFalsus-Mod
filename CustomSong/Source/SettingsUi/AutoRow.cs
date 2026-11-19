@@ -324,7 +324,7 @@ namespace CustomSong
                 }
                 catch (Exception e)
                 {
-                    ModLog.WarnRelease("AUTO row: a part could not be placed: " + ModLog.Describe(e));
+                    ModLog.Warn("AUTO row: a part could not be placed: " + ModLog.Describe(e));
                 }
             }
 
@@ -514,7 +514,7 @@ namespace CustomSong
             }
             catch (Exception e)
             {
-                ModLog.WarnRelease("AUTO row: the value could not be shown: " + ModLog.Describe(e));
+                ModLog.Warn("AUTO row: the value could not be shown: " + ModLog.Describe(e));
             }
         }
 
@@ -572,7 +572,7 @@ namespace CustomSong
             }
             catch (Exception e)
             {
-                ModLog.WarnRelease("AUTO row: the buttons could not be checked: " + ModLog.Describe(e));
+                ModLog.Warn("AUTO row: the buttons could not be checked: " + ModLog.Describe(e));
             }
         }
 
@@ -905,7 +905,7 @@ namespace CustomSong
 
             if (_setTextParameters == IntPtr.Zero)
             {
-                ModLog.WarnRelease("AUTO row: the text parameters setter was not resolved; " +
+                ModLog.Warn("AUTO row: the text parameters setter was not resolved; " +
                                    "the row has no words");
                 return;
             }
@@ -983,7 +983,7 @@ namespace CustomSong
             }
             catch (Exception e)
             {
-                ModLog.WarnRelease("AUTO row: a word could not be written: " + ModLog.Describe(e));
+                ModLog.Warn("AUTO row: a word could not be written: " + ModLog.Describe(e));
                 return 0;
             }
         }
@@ -1038,7 +1038,7 @@ namespace CustomSong
             IntPtr raised = IntPtr.Zero;
             Il2CppInterop.Runtime.IL2CPP.il2cpp_runtime_invoke(method, instance, (void**)args, ref raised);
             if (raised == IntPtr.Zero) return;
-            ModLog.WarnRelease($"AUTO row: the {what} call raised " + Name(raised));
+            ModLog.Warn($"AUTO row: the {what} call raised " + Name(raised));
         }
 
         private static unsafe IntPtr NewString(string words)
@@ -1212,7 +1212,7 @@ namespace CustomSong
             }
             catch (Exception e)
             {
-                ModLog.WarnRelease("AUTO row: the description could not be shown: " +
+                ModLog.Warn("AUTO row: the description could not be shown: " +
                                    ModLog.Describe(e));
             }
         }
@@ -1229,7 +1229,7 @@ namespace CustomSong
             }
             catch (Exception e)
             {
-                ModLog.WarnRelease("AUTO row: the description could not be put away: " +
+                ModLog.Warn("AUTO row: the description could not be put away: " +
                                    ModLog.Describe(e));
             }
         }
@@ -1444,7 +1444,7 @@ namespace CustomSong
                                                                      "UnityEngine", type);
             if (klass == IntPtr.Zero)
             {
-                ModLog.WarnRelease($"AUTO row: UnityEngine.{type} is not in this build, so its " +
+                ModLog.Warn($"AUTO row: UnityEngine.{type} is not in this build, so its " +
                                    $"{method} cannot be used");
                 return IntPtr.Zero;
             }
@@ -1454,7 +1454,7 @@ namespace CustomSong
 
             if (entry == IntPtr.Zero)
             {
-                ModLog.WarnRelease($"AUTO row: UnityEngine.{type}.{method} is not in this build");
+                ModLog.Warn($"AUTO row: UnityEngine.{type}.{method} is not in this build");
                 return IntPtr.Zero;
             }
 

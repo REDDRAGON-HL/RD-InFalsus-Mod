@@ -30,8 +30,8 @@ namespace CustomSong
             if (target == null) return false;
 
             if (NativeEntry.JumpTarget(CodeOf(target)) != IntPtr.Zero)
-                ModLog.Load($"{target.DeclaringType?.Name}.{target.Name} already has a detour at its " +
-                            "entry; Harmony will chain onto it");
+                {
+                }
 
             try
             {

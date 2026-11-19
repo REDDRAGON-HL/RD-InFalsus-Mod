@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using UnityEngineCore::UnityEngine;
 using Il2CppInterop.Runtime.InteropTypes;
+using CustomSong.Replay;
 
 namespace CustomSong.Auto
 {
@@ -42,7 +43,6 @@ namespace CustomSong.Auto
         private static bool BeforeAdd()
         {
             _addCalls++;
-            if (_addCalls == 1) ModLog.Load("autoplay: the inventory's Add is live");
             if (!_blockOn) return true;
             _addBlocked++;
             return false;
@@ -61,8 +61,6 @@ namespace CustomSong.Auto
             bool practice = Loaded("InFalsusPractice");
             if (practice)
             {
-                ModLog.Load("autoplay: In Falsus Practice owns ResultsScene.Start; " +
-                            "the drop container marks the results screen");
             }
             else
             {
@@ -86,10 +84,6 @@ namespace CustomSong.Auto
 
             if (text != IntPtr.Zero)
                 _setText = (TextFn)Marshal.GetDelegateForFunctionPointer(text, typeof(TextFn));
-
-            ModLog.Load($"autoplay: results hooks {installed}/{attempted}" +
-                        $", text={(text != IntPtr.Zero ? "yes" : "no")}" +
-                        $", inventory={(addPatched ? "watched" : "not watched")}");
         }
 
         private static bool Loaded(string assembly)
@@ -190,20 +184,20 @@ namespace CustomSong.Auto
 
         private static void StartPrefix(Il2CppObjectBase __instance)
         {
-            if (AutoMark.Ran)
-                ModLog.Load("autoplay: the results screen is starting" +
-                            (ScoreStore.EncounterRan ? " (with a recollection)" : ""));
+            if (AutoMark.Ran || ReplayCore.Ran)
+                {
+                }
         }
 
         private static void StartPostfix(Il2CppObjectBase __instance)
         {
             RetireScene();
-            if (!AutoMark.Ran) return;
+            IntPtr scene = HarmonyHooks.Pointer(__instance);
+            ReplayScreen.ResultsStarted(scene);
+            if (!AutoMark.Ran && !ReplayCore.Ran) return;
 
             try
             {
-                ModLog.Load("autoplay: the results screen is up");
-                IntPtr scene = HarmonyHooks.Pointer(__instance);
                 Plain(scene);
                 Decorate(scene);
                 _decorated = true;
@@ -221,6 +215,7 @@ namespace CustomSong.Auto
             ModLog.Error("autoplay: the results screen threw while it was being built: " +
                          ModLog.Describe(__exception));
             AutoMark.Ran = false;
+            ReplayCore.Ran = false;
             return null;
         }
 
@@ -229,7 +224,7 @@ namespace CustomSong.Auto
         {
             Hooks.Alive("IotaDropsContainer.Awake");
             _containerAwakeTramp(self);
-            if (!AutoMark.Ran || _decorated) return;
+            if (_decorated) return;
             _container = Memory.LooksLikeObject(self) ? self : IntPtr.Zero;
         }
 
@@ -252,15 +247,13 @@ namespace CustomSong.Auto
             IntPtr container = _container;
             _container = IntPtr.Zero;
             RetireScene();
-            if (!AutoMark.Ran) return;
             IntPtr scene = SceneAbove(container);
+            ReplayScreen.ResultsStarted(scene);
+            if (!AutoMark.Ran && !ReplayCore.Ran) return;
 
             try
             {
-                ModLog.Load("autoplay: the results screen is up (from its drop container)");
                 if (scene != IntPtr.Zero) Plain(scene);
-                else ModLog.Load("autoplay: the screen object was not found above the drop container; " +
-                                 "only the drop row is marked");
                 DecorateAt(container);
                 _decorated = true;
             }
@@ -276,17 +269,23 @@ namespace CustomSong.Auto
             {
                 Transform at = new Component(component).transform;
                 if (at == null) return IntPtr.Zero;
-                while (at.parent != null) at = at.parent;
-                GameObject root = at.gameObject;
-                if (root == null) return IntPtr.Zero;
 
-                foreach (Component part in root.GetComponentsInChildren<Component>(true))
+                while (at != null)
                 {
-                    if (part == null) continue;
-                    IntPtr klass = Il2CppInterop.Runtime.IL2CPP.il2cpp_object_get_class(part.Pointer);
-                    if (klass == IntPtr.Zero) continue;
-                    if (Il2CppInterop.Runtime.IL2CPP.il2cpp_class_get_name_(klass) == "ResultsScene")
-                        return part.Pointer;
+                    GameObject go = at.gameObject;
+                    if (go != null)
+                    {
+                        foreach (Component part in go.GetComponents<Component>())
+                        {
+                            if (part == null) continue;
+                            IntPtr klass = Il2CppInterop.Runtime.IL2CPP.il2cpp_object_get_class(part.Pointer);
+                            if (klass == IntPtr.Zero) continue;
+                            if (Il2CppInterop.Runtime.IL2CPP.il2cpp_class_get_name_(klass) == "ResultsScene")
+                                return part.Pointer;
+                        }
+                    }
+
+                    at = at.parent;
                 }
             }
             catch (Exception e)
@@ -307,6 +306,7 @@ namespace CustomSong.Auto
             AutoMark.Ran = false;
             ScoreStore.EncounterRan = false;
             BlockParticles(false);
+            ReplayCore.OnLeavingResults();
             CustomSongCore.RescanResults();
         }
 
@@ -337,7 +337,6 @@ namespace CustomSong.Auto
             if (Show(_encounterBacking, false)) changed++;
             if (Show(_rewardBanner, false)) changed++;
             if (Show(_battleLayer, false)) changed++;
-            ModLog.Load($"autoplay: {changed}/4 recollection object(s) put away");
         }
 
         private static void Decorate(IntPtr scene)
@@ -363,7 +362,6 @@ namespace CustomSong.Auto
             shown += Show(container, _right, false);
             shown += HideCells(container);
             int texts = WriteTexts(container);
-            ModLog.Load($"autoplay: results marked ({shown} object(s) switched, {texts} text(s))");
             Report();
         }
 
@@ -414,6 +412,15 @@ namespace CustomSong.Auto
             }
         }
 
+        internal static bool SetText(IntPtr text, string value)
+        {
+            if (_setText == null || value == null || !Memory.LooksLikeObject(text)) return false;
+            IntPtr managed = Il2CppInterop.Runtime.IL2CPP.ManagedStringToIl2Cpp(value);
+            if (managed == IntPtr.Zero) return false;
+            _setText(text, managed, 0);
+            return true;
+        }
+
         private static int WriteTexts(IntPtr container)
         {
             if (_setText == null) return 0;
@@ -421,7 +428,9 @@ namespace CustomSong.Auto
             if (!Memory.LooksLikeObject(array)) return 0;
             int length = Memory.I32(array + AutoOffsets.Runtime.ListSize);
             if (length <= 0 || length > 16) return 0;
-            IntPtr value = Il2CppInterop.Runtime.IL2CPP.ManagedStringToIl2Cpp("AUTOPLAY");
+
+            IntPtr value = Il2CppInterop.Runtime.IL2CPP.ManagedStringToIl2Cpp(
+                ReplayCore.Ran ? "REPLAY" : "AUTOPLAY");
             int written = 0;
 
             for (int i = 0; i < length; i++)
@@ -439,18 +448,12 @@ namespace CustomSong.Auto
         {
             if (!CurrentSong.TryRead(out IntPtr song, out int difficulty))
             {
-                ModLog.Load($"autoplay: results could not name the song (reads {ScoreStore.Reads}, " +
-                            $"served {ScoreStore.Served})");
                 return;
             }
 
             ushort id = Offsets.Ready ? Memory.U16(song + Offsets.Song.Id) : (ushort)0;
             bool ours = ScoreStore.IsOurs(song);
             ulong stored = ours ? Hooks.StoredScore(ScoreStore.Table, song, 1 << difficulty) : 0;
-
-            ModLog.Load($"autoplay: results song {id} difficulty {difficulty} ours={ours} " +
-                        $"stored={stored} (reads {ScoreStore.Reads}, served {ScoreStore.Served}, " +
-                        $"updates {ScoreStore.Updates})");
         }
     }
 }

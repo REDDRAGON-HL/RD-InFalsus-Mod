@@ -70,13 +70,11 @@ namespace CustomSong
                 HarmonyHooks.Target("Track", "Update", "ifapp.Game.Scenes.Game"),
                 null,
                 HarmonyHooks.Handler(typeof(SceneControl), nameof(UpdatePostfix)));
-            ModLog.Load($"scene rows: {(ok ? 1 : 0)}/1 hook installed");
 
             bool gone = HarmonyHooks.Patch(
                 HarmonyHooks.Target("Track", "OnDestroy", "ifapp.Game.Scenes.Game"),
                 null,
                 HarmonyHooks.Handler(typeof(SceneControl), nameof(DestroyPostfix)));
-            ModLog.Load($"scene rows: {(gone ? 1 : 0)}/1 teardown hook installed");
         }
 
         internal static void Uninstall()
@@ -117,8 +115,6 @@ namespace CustomSong
         private static void DestroyPostfix(Il2CppObjectBase __instance)
         {
             if (!SceneDirectives.Any && !GroupSpeed.Any) return;
-
-            ModLog.Load("scene rows: the gameplay scene is going away; the rows are forgotten");
             Reset();
         }
 
@@ -157,12 +153,6 @@ namespace CustomSong
             if (probe)
             {
                 _probed = true;
-                ModLog.Load($"scene rows: pool capacity={capacity} stride={stride} " +
-                            $"active=0x{layout.Active:X} spare=0x{layout.Spare:X} " +
-                            $"entries=0x{layout.Entries:X} key=0x{layout.Key:X} " +
-                            $"value=0x{layout.Value:X} item4=0x{layout.Item4:X}");
-                ModLog.Load($"scene rows: chart {SceneDirectives.CurrentGroups.Count} timing group(s), " +
-                            $"{SceneDirectives.CurrentSkyGroups.Count} sky note(s)");
             }
 
             int shown = 0;
@@ -177,8 +167,9 @@ namespace CustomSong
                 if (!Memory.LooksLikeObject(area)) continue;
 
                 if (probe && shown++ < 8)
-                    ModLog.Load($"scene rows: pool id={id} idAt50={Memory.I64(area + AreaNoteId)} " +
-                                $"area=0x{area.ToInt64():X}");
+                    {
+                    }
+
                 long group = SceneDirectives.SkyGroupOf(id);
                 int timingGroup = SceneDirectives.TimingGroupOf(id) & TimingGroupMask;
                 if (!_colors.ContainsKey(group) && !_hidden.ContainsKey(timingGroup)) continue;
@@ -187,7 +178,8 @@ namespace CustomSong
             }
 
             if (probe)
-                ModLog.Load($"scene rows: pool {matched} bar(s) had a row to apply");
+                {
+                }
         }
 
         private static Layout LayoutOf(IntPtr pool)
@@ -235,8 +227,11 @@ namespace CustomSong
 
             _layouts[klass] = layout;
             if (!layout.Ready)
+                {
                 ModLog.Warn("scene rows: the sky-area pools could not be read in this build; " +
                             "setcolor and hidegroup will do nothing");
+                }
+
             return layout.Ready ? layout : null;
         }
 
@@ -264,10 +259,20 @@ namespace CustomSong
 
             bool hidden = TryHidden(timingGroup, now, out bool hide) && hide;
             bool hasColor = TryColor(group, now, out uint rgba, out bool edgeGlow);
-
             SetVisible(area, !hidden, ref applied);
 
-            if (hidden || !hasColor)
+            if (hidden)
+            {
+                if (applied.Tinted && applied.Original != IntPtr.Zero)
+                {
+                    Memory.WritePtr(area + AreaColorDetails, applied.Original);
+                    applied.Tinted = false;
+                }
+                _applied[area] = applied;
+                return;
+            }
+
+            if (!hasColor)
             {
                 if (applied.Tinted && applied.Original != IntPtr.Zero)
                 {
@@ -280,7 +285,6 @@ namespace CustomSong
 
             uint tint = rgba;
             bool glow = edgeGlow;
-
             IntPtr current = Memory.Ptr(area + AreaColorDetails);
             if (current == IntPtr.Zero)
             {
@@ -313,7 +317,6 @@ namespace CustomSong
             if (_swaps < 8)
             {
                 _swaps++;
-                ModLog.Load($"scene rows: group {group} -> #{tint:X8}");
             }
         }
 
@@ -325,11 +328,9 @@ namespace CustomSong
             {
                 IntPtr renderer = Memory.Ptr(area + AreaRenderer);
                 if (!Memory.LooksLikeObject(renderer)) return;
-
                 var target = new UnityEngineCore::UnityEngine.Renderer(renderer);
                 if (target == null) return;
                 if (target.enabled == visible) return;
-
                 target.enabled = visible;
             }
             catch (Exception e)
@@ -527,7 +528,9 @@ namespace CustomSong
         private static void NoteFailure(string where, Exception e)
         {
             if (_failures++ < 3)
+                {
                 ModLog.Warn($"scene rows: {where} failed: {ModLog.Describe(e)}");
+                }
         }
     }
 }

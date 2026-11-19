@@ -22,7 +22,6 @@ namespace CustomSong
 
         internal static void Loaded()
         {
-            ModLog.Load("Custom Song loading...");
         }
 
         internal static void Initialize()
@@ -45,9 +44,6 @@ namespace CustomSong
                 _chartsDirty = false;
                 mark = Timing.Now;
                 if (_watcher == null) _fingerprint = Fingerprint(_root);
-                int total = 0;
-                foreach (ChartPack pack in _packs) total += pack.Charts.Count;
-                ModLog.Load($"packs: {_packs.Count}, charts: {total}");
 
                 try
                 {
@@ -76,8 +72,9 @@ namespace CustomSong
             AutoSwitch.NoteOpen("frame");
             AutoRow.Tick();
             LevelLabelHooks.Check();
-            Hooks.TickStripWindow();
+            Hooks.TickNewTags();
             Auto.AutoResults.Poll();
+            Replay.ReplayScreen.Poll();
 
             if (_registered) return;
             if (_packs.Count == 0) return;
@@ -96,6 +93,7 @@ namespace CustomSong
                 ScoreStore.ScanResults(_songData);
                 _registered = true;
                 ApplyPackVisuals();
+                JacketCatalog.WarmAll();
                 ModLog.Load("charts registered");
             }
             catch (Exception e)
@@ -110,10 +108,15 @@ namespace CustomSong
             _hooksInstalled = true;
             long mark = Timing.Now;
             Hooks.Install();
+            mark = Timing.Now;
             AutoSwitchHook.Install();
             AutoRowHooks.Install();
+            mark = Timing.Now;
             Auto.AutoHooks.Install();
             Auto.AutoResults.Install();
+            mark = Timing.Now;
+            Replay.ReplayScreen.Install();
+            mark = Timing.Now;
             PackText.Install();
             SceneControl.Install();
             AudioOffset.Install();
@@ -124,20 +127,22 @@ namespace CustomSong
         internal static void OnSceneTransition(string destination)
         {
             if (!_registered) return;
-
-            if (!_warmed && destination == HubSceneName)
-            {
-                _warmed = true;
-                JacketCatalog.WarmAll();
-            }
-
             if (destination != SongSelectSceneName) return;
             HotReloadIfChanged();
+            _songSelectMark = Timing.Now;
         }
 
-        private static bool _warmed;
+        private static long _songSelectMark;
+        internal static long SongSelectMark => _songSelectMark;
+
+        internal static void PageArrived()
+        {
+            long mark = _songSelectMark;
+            if (mark == 0) return;
+            _songSelectMark = 0;
+        }
+
         private const string SongSelectSceneName = "SongSelectScene";
-        private const string HubSceneName = "HubScene";
 
         internal static void HotReloadIfChanged()
         {
@@ -168,7 +173,6 @@ namespace CustomSong
                 ModLog.Load("charts changed on disk; reloading");
                 SongCatalog.RestoreBaseline(_songData, _packData);
                 _visualTables.Clear();
-                PackText.ResetVisualCache();
                 ChartCatalog.Reset();
                 AudioCatalog.Reset();
                 JacketCatalog.Reset();
@@ -183,7 +187,6 @@ namespace CustomSong
                 {
                     SongCatalog.RefreshList(_songData);
                     PackText.RefreshLookup(_packData);
-                    ModLog.Load("charts: 0 registered");
                     return;
                 }
 
@@ -192,8 +195,6 @@ namespace CustomSong
                 ScoreStore.ScanResults(_songData);
                 mark = Timing.Now;
                 ApplyPackVisuals();
-                JacketCatalog.WarmAll();
-                _warmed = true;
                 ModLog.Load("charts reloaded");
             }
             catch (Exception e)
@@ -235,7 +236,6 @@ namespace CustomSong
                 if (!_visualsWaitingLogged)
                 {
                     _visualsWaitingLogged = true;
-                    ModLog.Load("pack visuals: not ready");
                 }
                 return;
             }
@@ -244,7 +244,6 @@ namespace CustomSong
             long mark = Timing.Now;
             if (!ApplyVisualsTo(assets)) return;
             PackText.RefreshLookup(_packData);
-            ModLog.Load("pack visuals applied");
         }
 
         internal static bool ApplyVisualsTo(IntPtr assets)
@@ -259,7 +258,6 @@ namespace CustomSong
 
             if (!PackText.PrepareVisualRows(assets, highestId))
             {
-                ModLog.Load("pack visual rows: could not be prepared");
                 return false;
             }
 
@@ -346,7 +344,6 @@ namespace CustomSong
                 _watcher.Renamed += OnChartsRenamed;
                 _watcher.Error += OnChartsWatcherError;
                 _watcher.EnableRaisingEvents = true;
-                ModLog.Load("charts folder is watched for changes");
             }
             catch (Exception e)
             {
@@ -403,21 +400,13 @@ namespace CustomSong
                 if (info.NoChart[d]) continue;
                 string path = info.ChartPaths[d];
                 if (!checkedPaths.Add(path)) continue;
-                byte[] bytes;
-                try
-                {
-                    bytes = File.ReadAllBytes(path);
-                }
-                catch (Exception e)
-                {
-                    return $"difficulty {d} could not be read: {ModLog.Describe(e)}";
-                }
 
                 unsafe
                 {
                     fixed (byte* tuple = scratch)
                     {
-                        if (!ChartCodec.TryDecode(bytes, info.ChartNames[d], (IntPtr)tuple, out string reason))
+                        if (!ChartCodec.TryDecodeCached(path, info.ChartNames[d], (IntPtr)tuple,
+                                                        out string reason))
                             return $"difficulty {d}: {reason}";
                     }
                 }
@@ -427,12 +416,17 @@ namespace CustomSong
             mark = Timing.Now;
 
             if (!JacketCatalog.Add(info, out string jacketReason))
+                {
                 ModLog.Warn($"'{info.Name}' has no jacket of its own: {jacketReason}");
+                }
+
             double jacket = Timing.Ms(mark);
             mark = Timing.Now;
 
             if (!BackgroundCatalog.Add(info, out string backgroundReason))
+                {
                 ModLog.Warn($"'{info.Name}' has no background of its own: {backgroundReason}");
+                }
 
             return null;
         }

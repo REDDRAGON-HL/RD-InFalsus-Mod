@@ -64,8 +64,10 @@ namespace CustomSong.Auto
             if (!Loaded && _attempts >= MaxAttempts)
             {
                 if (_attempts == MaxAttempts)
+                    {
                     ModLog.Warn($"autoplay: chart could not be read after {MaxAttempts} frames; " +
                                 "it will do nothing this song");
+                    }
                 _attempts++;
                 return false;
             }
@@ -205,8 +207,10 @@ namespace CustomSong.Auto
             }
 
             if (badSide > 0 || badTime > 0)
+                {
                 ModLog.Warn($"autoplay: chart read dropped {badSide} bad side, {badTime} bad time, " +
                             $"of {size}");
+                }
 
             if (list.Count == 0) { notes = null; return false; }
 

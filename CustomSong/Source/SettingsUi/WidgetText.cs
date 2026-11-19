@@ -98,7 +98,7 @@ namespace CustomSong
             }
             catch (Exception e)
             {
-                ModLog.WarnRelease("level labels: a text could not be written: " + ModLog.Describe(e));
+                ModLog.Warn("level labels: a text could not be written: " + ModLog.Describe(e));
                 return IntPtr.Zero;
             }
         }
@@ -118,7 +118,7 @@ namespace CustomSong
             }
             catch (Exception e)
             {
-                ModLog.WarnRelease("level labels: a text could not be written: " + ModLog.Describe(e));
+                ModLog.Warn("level labels: a text could not be written: " + ModLog.Describe(e));
                 return IntPtr.Zero;
             }
         }

@@ -6,6 +6,8 @@ namespace CustomSong.Auto
         {
             internal static int CursorRaw = 0x10;
             internal static int CursorClamped = 0x98;
+            internal static int FlickLeft = 0x88;
+            internal static int FlickRight = 0x90;
             internal static int ChartTime = 0xD0;
             internal static int Input = 0x58;
         }

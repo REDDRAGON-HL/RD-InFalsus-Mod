@@ -154,8 +154,6 @@ namespace CustomSong
                 {
                     AddArray(Memory.Ptr(track + 0x808));
                 }
-
-                ModLog.Load($"scene rows: trackdisplay took {_renderers.Count} renderer(s)");
             }
             catch (Exception e)
             {
@@ -313,7 +311,9 @@ namespace CustomSong
         private static void NoteFailure(string where, Exception e)
         {
             if (_failures++ < 3)
+                {
                 ModLog.Warn($"scene rows: trackdisplay {where} failed: {ModLog.Describe(e)}");
+                }
         }
     }
 }

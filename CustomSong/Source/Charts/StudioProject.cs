@@ -44,12 +44,11 @@ namespace CustomSong
 
                 if (document == null)
                 {
-                    ModLog.WarnRelease($"'{name}' has a Studio project but nothing could be taken from it: {reason}");
+                    ModLog.Warn($"'{name}' has a Studio project but nothing could be taken from it: {reason}");
                     return false;
                 }
 
                 File.WriteAllText(ifPath, Serialize(document), new UTF8Encoding(false));
-                ModLog.Load($"'{name}': wrote an if from its Studio project");
                 return true;
             }
             catch (Exception e)
@@ -117,8 +116,11 @@ namespace CustomSong
                     string own = Text(item, "jacket");
                     string ownPicture = PictureAt(folder, own);
                     if (!string.IsNullOrWhiteSpace(own) && ownPicture == null)
-                        ModLog.WarnRelease($"'{Path.GetFileName(folder)}': the jacket '{own}' is not in the " +
+                        {
+                        ModLog.Warn($"'{Path.GetFileName(folder)}': the jacket '{own}' is not in the " +
                                            "folder; the song's own picture is used instead");
+                        }
+
                     jacket.Add(ownPicture ?? songJacket);
                     string drawn = Text(item, "jacketDesigner");
                     illust.Add(string.IsNullOrEmpty(drawn) ? null : drawn);
@@ -250,7 +252,6 @@ namespace CustomSong
                 if (!File.Exists(target))
                 {
                     File.Move(source, target);
-                    ModLog.Load($"'{Path.GetFileName(folder)}': moved '{name}' out of {WorkFolder}");
                 }
 
                 return name;
@@ -279,8 +280,6 @@ namespace CustomSong
             if (!string.Equals(source, target, StringComparison.OrdinalIgnoreCase) && !File.Exists(target))
             {
                 File.Move(source, target);
-                ModLog.Load($"'{Path.GetFileName(folder)}': moved '{bare}' out of " +
-                            $"{Path.GetDirectoryName(name)}");
             }
 
             return bare;

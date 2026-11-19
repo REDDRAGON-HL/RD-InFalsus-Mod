@@ -21,7 +21,7 @@ namespace CustomSong
         {
             try
             {
-                if (!Patch()) ModLog.WarnRelease(
+                if (!Patch()) ModLog.Warn(
                     "the chart size limits could not be found in this build; a chart longer than " +
                     "the shipped ones will stop the run while it is being set up");
             }

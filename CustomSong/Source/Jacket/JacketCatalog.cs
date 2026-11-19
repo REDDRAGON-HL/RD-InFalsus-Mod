@@ -43,13 +43,15 @@ namespace CustomSong
             {
                 try
                 {
-                    foreach (string path in paths)
+                    int lanes = Math.Max(1, Math.Min(3, Environment.ProcessorCount / 2));
+                    var options = new ParallelOptions { MaxDegreeOfParallelism = lanes };
+
+                    Parallel.ForEach(paths, options, path =>
                     {
-                        string warm = path;
                         MainThread.DecodeAndBuild(
-                            () => JacketFactory.DecodeFile(warm, out _),
-                            image => JacketFactory.BuildFrom(image, warm, "jacket", out _));
-                    }
+                            () => JacketFactory.DecodeFile(path, out _),
+                            image => JacketFactory.BuildFrom(image, path, "jacket", out _));
+                    });
                 }
                 finally
                 {
@@ -180,8 +182,10 @@ namespace CustomSong
                     made[path] = material;
 
                     if (material == IntPtr.Zero)
-                        ModLog.WarnRelease($"jacket '{System.IO.Path.GetFileName(path)}' could not be " +
+                        {
+                        ModLog.Warn($"jacket '{System.IO.Path.GetFileName(path)}' could not be " +
                                            "built: " + why);
+                        }
                 }
 
                 materials[d] = material;

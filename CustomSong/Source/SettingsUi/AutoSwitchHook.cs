@@ -39,7 +39,6 @@ namespace CustomSong
             };
             _awake.Attach();
             _awakeTramp = _awake.Trampoline;
-            ModLog.Load("AUTO switch: the settings page is hooked");
         }
 
         internal static void Detach()
@@ -62,7 +61,7 @@ namespace CustomSong
             }
             catch (Exception e)
             {
-                ModLog.WarnRelease("AUTO switch: the settings page could not be taken: " + ModLog.Describe(e));
+                ModLog.Warn("AUTO switch: the settings page could not be taken: " + ModLog.Describe(e));
             }
         }
     }
